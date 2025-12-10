@@ -1,0 +1,177 @@
+/* ========== FONT FACES ========== */
+@font-face {
+  font-family: "AeternusNano";
+  src: url("Aeternus/01-aeternus_nano.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "AeternusHeavy";
+  src: url("Aeternus/04-aeternus_heavy.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Wisconsin";
+  src: url("Aeternus/Wisconsin-Regular.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "GothamBold";
+  src: url("Aeternus/Gotham-Bold.otf") format("opentype");
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "GothamMedium";
+  src: url("Aeternus/Gotham-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+/* ========== GLOBAL LAYOUT ========== */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)),
+    url("Court BG 4.jpg") center center / cover no-repeat fixed;
+  color: #ffffff;
+  font-family: "AeternusNano", sans-serif;
+}
+
+/* Flex column so footer never overlaps rows */
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 2vh 5vw;
+  box-sizing: border-box;
+}
+
+/* ========== HEADER ========== */
+.header {
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.header h1 {
+  font-size: 12vh;
+  line-height: 0.55;
+  margin: 0 0 1vh 0;
+  width: 100%;
+}
+
+/* ========== MAIN TABLE AREA ========== */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.standings-table {
+  margin-top: 0.2vh;
+}
+
+/* Row layout: rank | team(+ap) | conf | ovr */
+.row {
+  display: grid;
+  grid-template-columns: minmax(3ch, 6ch) 1fr minmax(7ch, 10ch) minmax(7ch, 10ch);
+  column-gap: 2vw;
+  align-items: center;
+  padding: 0.3vh 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 3.8vh;
+}
+
+/* Rank */
+.rank {
+  opacity: 0.9;
+  font-family: "AeternusHeavy", sans-serif;
+}
+
+/* Team cell = AP rank + team name */
+.team-cell {
+  position: relative;
+  padding-left: 1.6ch; /* reserve space for AP rank without shifting name */
+  display: block;
+}
+
+/* AP rank as superscript before name */
+.ap-rank {
+  position: absolute;
+  left: 0;
+  top: 0.1em;
+  font-size: 0.6em;
+  opacity: 0.85;
+  transform: translateY(-0.05em);
+  text-align: right;
+  width: 2ch; /* fixed width, but does not push the team name */
+  font-family: "AeternusNano", sans-serif;
+}
+
+/* Team name in all caps (uppercased in JS) */
+.team-name {
+  font-family: "AeternusHeavy", sans-serif;
+  letter-spacing: -0.01em;
+  font-weight: 900;
+  font-size: 5vh;
+  display: block;
+  text-align: left;
+}
+
+/* Conf / Ovr columns */
+.conf,
+.ovr {
+  text-align: center;
+  font-family: "GothamMedium", sans-serif;
+  font-size: 2.2vh;
+}
+
+/* Highlighted CONF column */
+.conf {
+  font-family: "GothamBold", sans-serif;
+  background-color: rgba(36, 3, 3, 0.736);
+  padding: 0.2em 0.4em;
+  border-radius: 0.2em;
+}
+
+/* Highlight Wisconsin row */
+.row.wisconsin {
+  background: rgba(36, 3, 3, 0.736);
+}
+
+.row.wisconsin .team-name {
+  font-family: "Wisconsin", sans-serif;
+  font-weight: normal;
+  letter-spacing: 0.02em;
+  font-size: 3.3vh;
+}
+
+/* ========== FOOTER ========== */
+.footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 1.9vh;
+  opacity: 0.85;
+  margin-top: 2vh;
+}
+
+.brand {
+  letter-spacing: 0.18em;
+}
+
+.timestamp {
+  text-align: right;
+}
