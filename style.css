@@ -253,8 +253,12 @@ body {
 
 .row.wisconsin {
   background: var(--color-highlight-bg);
-  padding: 0.6vh 0.8vw;
-  border-radius: 0.3em;
+  padding-top: 0.5vh;
+  padding-bottom: 0.5vh;
+  margin-left: -1vw;
+  margin-right: -1vw;
+  padding-left: 1vw;
+  padding-right: 1vw;
 }
 
 .row.wisconsin .team-name {

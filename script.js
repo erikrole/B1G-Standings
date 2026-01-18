@@ -75,17 +75,20 @@ function compareTeams(a, b) {
   // 2) Conference wins (more wins first)
   if (b.confWins !== a.confWins) return b.confWins - a.confWins;
 
-  // 3) Overall winning percentage (higher first)
+  // 3) Conference losses (fewer losses first, when wins are tied)
+  if (a.confLosses !== b.confLosses) return a.confLosses - b.confLosses;
+
+  // 4) Overall winning percentage (higher first)
   if (b.pct !== a.pct) return b.pct - a.pct;
 
-  // 4) Overall total wins (more wins first)
+  // 5) Overall total wins (more wins first)
   if (b.wins !== a.wins) return b.wins - a.wins;
 
-  // 5) Wisconsin bump among identical records
+  // 6) Wisconsin bump among identical records
   if (a.isWisconsin && !b.isWisconsin) return -1;
   if (b.isWisconsin && !a.isWisconsin) return 1;
 
-  // 6) AP ranking: ranked teams first, then lower number is better
+  // 7) AP ranking: ranked teams first, then lower number is better
   const aRanked = a.apRank < NO_RANK_VALUE;
   const bRanked = b.apRank < NO_RANK_VALUE;
 
@@ -96,7 +99,7 @@ function compareTeams(a, b) {
     return a.apRank - b.apRank;
   }
 
-  // 7) Alphabetical fallback
+  // 8) Alphabetical fallback
   return a.team.localeCompare(b.team);
 }
 
