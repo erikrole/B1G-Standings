@@ -102,10 +102,8 @@ body {
 
 /* Connection status indicator */
 .connection-status {
-  position: absolute;
-  top: 1vh;
-  right: 1vw;
-  font-size: 2vh;
+  font-size: 1.8vh;
+  margin-left: 0.5ch;
   transition: color 0.3s ease;
 }
 
@@ -255,6 +253,8 @@ body {
 
 .row.wisconsin {
   background: var(--color-highlight-bg);
+  padding: 0.6vh 0.8vw;
+  border-radius: 0.3em;
 }
 
 .row.wisconsin .team-name {
@@ -279,8 +279,13 @@ body {
   letter-spacing: 0.18em;
 }
 
-.timestamp {
+.timestamp-container {
+  display: flex;
+  align-items: center;
   text-align: right;
+}
+
+.timestamp {
   transition: color 0.3s ease;
 }
 
