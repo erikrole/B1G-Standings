@@ -4,6 +4,9 @@
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/1bOdPDPKf1QHUyayNgDToaCtu3k6_-bccnWLNqpyayvQ/export?format=csv&gid=1204601349";
 
+const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const NO_RANK_VALUE = 999;
+
 // =====================
 // CSV PARSING
 // =====================
@@ -12,7 +15,26 @@ function parseCSV(text) {
   if (lines.length === 0) return { headers: [], rows: [] };
 
   const headers = lines[0].split(",").map(h => h.trim());
-  const rows = lines.slice(1).map(line => line.split(","));
+  const rows = lines.slice(1).map(line => {
+    const cells = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === "," && !inQuotes) {
+        cells.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    cells.push(current.trim());
+    return cells;
+  });
+
   return { headers, rows };
 }
 
@@ -27,6 +49,70 @@ function parseRecord(str) {
   const wins = parseInt(wRaw, 10) || 0;
   const losses = parseInt(lRaw, 10) || 0;
   return { wins, losses };
+}
+
+function calculateWinPercentage(wins, losses) {
+  const total = wins + losses;
+  return total === 0 ? 0 : wins / total;
+}
+
+function compareTeams(a, b) {
+  // 1) Conference winning percentage (higher first)
+  if (b.confPct !== a.confPct) return b.confPct - a.confPct;
+
+  // 2) Conference wins (more wins first)
+  if (b.confWins !== a.confWins) return b.confWins - a.confWins;
+
+  // 3) Overall winning percentage (higher first)
+  if (b.pct !== a.pct) return b.pct - a.pct;
+
+  // 4) Overall total wins (more wins first)
+  if (b.wins !== a.wins) return b.wins - a.wins;
+
+  // 5) Wisconsin bump among identical records
+  if (a.isWisconsin && !b.isWisconsin) return -1;
+  if (b.isWisconsin && !a.isWisconsin) return 1;
+
+  // 6) AP ranking: ranked teams first, then lower number is better
+  const aRanked = a.apRank < NO_RANK_VALUE;
+  const bRanked = b.apRank < NO_RANK_VALUE;
+
+  if (aRanked && !bRanked) return -1;
+  if (bRanked && !aRanked) return 1;
+
+  if (aRanked && bRanked && a.apRank !== b.apRank) {
+    return a.apRank - b.apRank;
+  }
+
+  // 7) Alphabetical fallback
+  return a.team.localeCompare(b.team);
+}
+
+function showError(message) {
+  const tableEl = document.getElementById("table");
+  if (tableEl) {
+    tableEl.innerHTML = `<div style="padding-top:20px;font-size:24px;opacity:0.7;">${message}</div>`;
+  }
+}
+
+function createTeamRow(rowData, index) {
+  const { team, conf, ovr, apRank, isWisconsin } = rowData;
+
+  const row = document.createElement("div");
+  row.className = "row";
+  if (isWisconsin) row.classList.add("wisconsin");
+
+  row.innerHTML = `
+    <div class="rank">${index + 1}.</div>
+    <div class="team-cell">
+      ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
+      <span class="team-name">${team}</span>
+    </div>
+    <div class="conf">${conf}</div>
+    <div class="ovr">${ovr}</div>
+  `;
+
+  return row;
 }
 
 // =====================
@@ -60,10 +146,7 @@ async function loadStandings() {
       LOSSES_COL == null
     ) {
       console.error("Missing required columns:", headers);
-      document.getElementById("table").innerHTML =
-        `<div style="padding-top:20px;font-size:24px;opacity:0.7;">
-           Missing columns in sheet
-         </div>`;
+      showError("Missing columns in sheet");
       return;
     }
 
@@ -78,16 +161,14 @@ async function loadStandings() {
         const team = teamRaw.toUpperCase();
         const confStr = toDash(cols[CONF_COL]);
         const { wins: confWins, losses: confLosses } = parseRecord(confStr);
-        const confPct = confWins + confLosses === 0 ? -1 : confWins / (confWins + confLosses);
+        const confPct = calculateWinPercentage(confWins, confLosses);
         const ovr  = toDash(cols[OVR_COL]);
         const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
-        const apRank = apRaw ? parseInt(apRaw, 10) || 999 : 999;
+        const apRank = apRaw ? parseInt(apRaw, 10) || NO_RANK_VALUE : NO_RANK_VALUE;
 
         const wins = parseInt(cols[WINS_COL] || "0", 10);
         const losses = parseInt(cols[LOSSES_COL] || "0", 10);
-
-        // Add winning percentage property for sorting
-        const pct = wins + losses === 0 ? 0 : wins / (wins + losses);
+        const pct = calculateWinPercentage(wins, losses);
 
         return {
           team,
@@ -106,71 +187,23 @@ async function loadStandings() {
       })
       .filter(Boolean);
 
-    // ---- Sorting logic (CONF_PCT → CONF_WINS → OVR_PCT → WINS → WISCONSIN → AP RANK → ALPHABETICAL) ----
-    teamRows.sort((a, b) => {
-      // 1) Conference winning percentage (higher first)
-      if (b.confPct !== a.confPct) return b.confPct - a.confPct;
-
-      // 2) Conference wins (more wins first)
-      if (b.confWins !== a.confWins) return b.confWins - a.confWins;
-
-      // 3) Overall winning percentage (higher first)
-      if (b.pct !== a.pct) return b.pct - a.pct;
-
-      // 4) Overall total wins (more wins first)
-      if (b.wins !== a.wins) return b.wins - a.wins;
-
-      // 5) Wisconsin bump among identical records
-      if (a.isWisconsin && !b.isWisconsin) return -1;
-      if (b.isWisconsin && !a.isWisconsin) return 1;
-
-      // 6) AP ranking: ranked teams first, then lower number is better
-      const aRanked = a.apRank < 999;
-      const bRanked = b.apRank < 999;
-
-      if (aRanked && !bRanked) return -1;
-      if (bRanked && !aRanked) return 1;
-
-      if (aRanked && bRanked && a.apRank !== b.apRank) {
-        return a.apRank - b.apRank;
-      }
-
-      // 7) Alphabetical fallback
-      return a.team.localeCompare(b.team);
-    });
+    teamRows.sort(compareTeams);
 
     // ---- Render ----
     const tableEl = document.getElementById("table");
     tableEl.innerHTML = "";
 
+    const fragment = document.createDocumentFragment();
     teamRows.forEach((rowData, index) => {
-      const { team, conf, ovr, apRank, isWisconsin } = rowData;
-
-      const row = document.createElement("div");
-      row.className = "row";
-      if (isWisconsin) row.classList.add("wisconsin");
-
-      row.innerHTML = `
-        <div class="rank">${index + 1}.</div>
-        <div class="team-cell">
-          ${apRank < 999 ? `<span class="ap-rank">${apRank}</span>` : ""}
-          <span class="team-name">${team}</span>
-        </div>
-        <div class="conf">${conf}</div>
-        <div class="ovr">${ovr}</div>
-      `;
-
-      tableEl.appendChild(row);
+      fragment.appendChild(createTeamRow(rowData, index));
     });
+    tableEl.appendChild(fragment);
 
     const ts = document.getElementById("timestamp");
     if (ts) ts.textContent = "Updated " + new Date().toLocaleString();
   } catch (err) {
     console.error("Error loading CSV:", err);
-    document.getElementById("table").innerHTML =
-      `<div style="padding-top:20px;font-size:24px;opacity:0.7;">
-         Error loading data
-       </div>`;
+    showError("Error loading data");
   }
 }
 
@@ -178,4 +211,4 @@ async function loadStandings() {
 // INIT + AUTO REFRESH
 // =====================
 loadStandings();
-setInterval(loadStandings, 15 * 60 * 1000);
+setInterval(loadStandings, REFRESH_INTERVAL_MS);
