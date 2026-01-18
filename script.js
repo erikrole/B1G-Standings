@@ -6,6 +6,18 @@ const CSV_URL =
 
 const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const NO_RANK_VALUE = 999;
+const STALE_DATA_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+const MAX_RETRY_DELAY_MS = 5 * 60 * 1000; // 5 minutes max backoff
+const POSITION_CHANGE_DURATION_MS = 5000; // Highlight changes for 5 seconds
+
+// =====================
+// STATE
+// =====================
+let wakeLock = null;
+let lastSuccessfulUpdate = null;
+let previousStandings = new Map(); // team -> position
+let retryCount = 0;
+let refreshTimer = null;
 
 // =====================
 // CSV PARSING
@@ -91,22 +103,102 @@ function compareTeams(a, b) {
 function showError(message) {
   const tableEl = document.getElementById("table");
   if (tableEl) {
-    tableEl.innerHTML = `<div style="padding-top:20px;font-size:24px;opacity:0.7;">${message}</div>`;
+    tableEl.innerHTML = `<div class="error-message">${message}</div>`;
   }
+}
+
+function setLoadingState(isLoading) {
+  const loadingEl = document.getElementById("loading-indicator");
+  if (loadingEl) {
+    loadingEl.style.display = isLoading ? "block" : "none";
+  }
+}
+
+function updateConnectionStatus(isOnline) {
+  const statusEl = document.getElementById("connection-status");
+  if (statusEl) {
+    statusEl.className = `connection-status ${isOnline ? "online" : "offline"}`;
+    statusEl.textContent = isOnline ? "●" : "○";
+    statusEl.title = isOnline ? "Connected" : "Offline";
+  }
+}
+
+function updateTimestamp() {
+  const ts = document.getElementById("timestamp");
+  if (!ts) return;
+
+  if (!lastSuccessfulUpdate) {
+    ts.textContent = "Waiting for data...";
+    ts.className = "timestamp";
+    return;
+  }
+
+  const now = Date.now();
+  const timeSinceUpdate = now - lastSuccessfulUpdate;
+  const isStale = timeSinceUpdate > STALE_DATA_THRESHOLD_MS;
+
+  const updateDate = new Date(lastSuccessfulUpdate);
+  ts.textContent = "Last updated " + updateDate.toLocaleString();
+  ts.className = isStale ? "timestamp stale" : "timestamp";
+}
+
+async function requestWakeLock() {
+  if ("wakeLock" in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      console.log("Wake lock acquired");
+
+      wakeLock.addEventListener("release", () => {
+        console.log("Wake lock released");
+      });
+    } catch (err) {
+      console.error("Wake lock error:", err);
+    }
+  }
+}
+
+function calculateRetryDelay() {
+  const baseDelay = 1000; // 1 second
+  const delay = Math.min(baseDelay * Math.pow(2, retryCount), MAX_RETRY_DELAY_MS);
+  return delay;
 }
 
 function createTeamRow(rowData, index) {
   const { team, conf, ovr, apRank, isWisconsin } = rowData;
+  const currentPosition = index + 1;
 
   const row = document.createElement("div");
   row.className = "row";
   if (isWisconsin) row.classList.add("wisconsin");
+  row.dataset.team = team;
+
+  // Check if position changed
+  const previousPosition = previousStandings.get(team);
+  if (previousPosition !== undefined && previousPosition !== currentPosition) {
+    const positionChange = previousPosition - currentPosition;
+    row.classList.add("position-changed");
+
+    if (positionChange > 0) {
+      row.classList.add("moved-up");
+      row.dataset.change = `↑${positionChange}`;
+    } else {
+      row.classList.add("moved-down");
+      row.dataset.change = `↓${Math.abs(positionChange)}`;
+    }
+
+    // Remove highlight after duration
+    setTimeout(() => {
+      row.classList.remove("position-changed", "moved-up", "moved-down");
+      delete row.dataset.change;
+    }, POSITION_CHANGE_DURATION_MS);
+  }
 
   row.innerHTML = `
-    <div class="rank">${index + 1}.</div>
+    <div class="rank">${currentPosition}.</div>
     <div class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
       <span class="team-name">${team}</span>
+      ${row.dataset.change ? `<span class="position-change-indicator">${row.dataset.change}</span>` : ""}
     </div>
     <div class="conf">${conf}</div>
     <div class="ovr">${ovr}</div>
@@ -119,8 +211,15 @@ function createTeamRow(rowData, index) {
 // MAIN LOAD FUNCTION
 // =====================
 async function loadStandings() {
+  setLoadingState(true);
+
   try {
     const res = await fetch(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
+
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+
     const text = await res.text();
 
     const { headers, rows } = parseCSV(text);
@@ -199,16 +298,77 @@ async function loadStandings() {
     });
     tableEl.appendChild(fragment);
 
-    const ts = document.getElementById("timestamp");
-    if (ts) ts.textContent = "Updated " + new Date().toLocaleString();
+    // Update standings tracking for next comparison
+    previousStandings.clear();
+    teamRows.forEach((rowData, index) => {
+      previousStandings.set(rowData.team, index + 1);
+    });
+
+    // Update timestamp and reset retry count on success
+    lastSuccessfulUpdate = Date.now();
+    retryCount = 0;
+    updateTimestamp();
+    updateConnectionStatus(true);
+    setLoadingState(false);
   } catch (err) {
     console.error("Error loading CSV:", err);
-    showError("Error loading data");
+    setLoadingState(false);
+    updateConnectionStatus(false);
+
+    // Implement exponential backoff retry
+    retryCount++;
+    const retryDelay = calculateRetryDelay();
+    console.log(`Retrying in ${retryDelay}ms (attempt ${retryCount})`);
+
+    setTimeout(() => {
+      loadStandings();
+    }, retryDelay);
+
+    // Only show error if we don't have previous data
+    if (!lastSuccessfulUpdate) {
+      showError("Error loading data - retrying...");
+    }
   }
+}
+
+function scheduleNextRefresh() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+  }
+
+  refreshTimer = setTimeout(() => {
+    loadStandings();
+    scheduleNextRefresh();
+  }, REFRESH_INTERVAL_MS);
 }
 
 // =====================
 // INIT + AUTO REFRESH
 // =====================
+
+// Request wake lock to keep screen on
+requestWakeLock();
+
+// Re-acquire wake lock when visibility changes
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && wakeLock === null) {
+    await requestWakeLock();
+  }
+});
+
+// Monitor online/offline status
+window.addEventListener("online", () => {
+  updateConnectionStatus(true);
+  loadStandings();
+});
+
+window.addEventListener("offline", () => {
+  updateConnectionStatus(false);
+});
+
+// Update timestamp display every minute
+setInterval(updateTimestamp, 60 * 1000);
+
+// Initial load and scheduled refreshes
 loadStandings();
-setInterval(loadStandings, REFRESH_INTERVAL_MS);
+scheduleNextRefresh();
