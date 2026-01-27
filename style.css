@@ -113,6 +113,21 @@ body {
   width: 100%;
 }
 
+/* Data source indicator */
+.data-source {
+  font-size: 1.8vh;
+  margin-left: 0.5ch;
+  transition: color 0.3s ease;
+}
+
+.data-source.worker {
+  color: var(--color-online); /* Green */
+}
+
+.data-source.csv {
+  color: var(--color-warning); /* Yellow */
+}
+
 /* Connection status indicator */
 .connection-status {
   font-size: 1.8vh;
