@@ -134,6 +134,14 @@ function updateConnectionStatus(isOnline) {
   }
 }
 
+function updateDataSourceIndicator(isWorker) {
+  const sourceEl = document.getElementById("data-source");
+  if (sourceEl) {
+    sourceEl.className = `data-source ${isWorker ? "worker" : "csv"}`;
+    sourceEl.title = isWorker ? "Cloudflare Worker" : "Google Sheets";
+  }
+}
+
 function updateTimestamp() {
   const ts = document.getElementById("timestamp");
   if (!ts) return;
@@ -199,7 +207,7 @@ function calculateRetryDelay() {
 }
 
 function createTeamRow(rowData, index) {
-  const { team, conf, ovr, apRank, isWisconsin } = rowData;
+  const { team, conf, ovr, apRank, netRank, isWisconsin } = rowData;
   const currentPosition = index + 1;
 
   const row = document.createElement("div");
@@ -233,6 +241,7 @@ function createTeamRow(rowData, index) {
     <div class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
       <span class="team-name">${team}</span>
+      ${netRank ? `<span class="net-rank">${netRank}</span>` : ""}
       ${row.dataset.change ? `<span class="position-change-indicator">${row.dataset.change}</span>` : ""}
     </div>
     <div class="conf">${conf}</div>
@@ -377,6 +386,7 @@ async function loadStandings() {
     retryCount = 0;
     updateTimestamp();
     updateConnectionStatus(true);
+    updateDataSourceIndicator(USE_WORKER);
     setLoadingState(false);
   } catch (err) {
     console.error("Error loading CSV:", err);
@@ -436,6 +446,9 @@ window.addEventListener("offline", () => {
 
 // Update timestamp display every minute
 setInterval(updateTimestamp, 60 * 1000);
+
+// Set initial data source indicator
+updateDataSourceIndicator(USE_WORKER);
 
 // Initial load and scheduled refreshes
 loadStandings();
