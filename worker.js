@@ -116,16 +116,17 @@ function parseHTML(html) {
       if (cells.length < 3) continue; // Need at least team + 2 records
 
       // Parse cell data
-      // Typical format: [Rank/Position, Team, Conf, Overall, ...]
+      // Typical format: [Rank/Position, Team, Conf, Overall, NET, ...]
       let teamName = '';
       let confRecord = '';
       let ovrRecord = '';
       let apRank = 999;
+      let netRank = null;
 
       // Figure out which cells have which data
       // Cell 0 or 1 usually has team name
       // Look for the cell that's not a record format
-      for (let j = 0; j < Math.min(cells.length, 4); j++) {
+      for (let j = 0; j < Math.min(cells.length, 8); j++) {
         const cell = cells[j];
 
         if (!cell) continue;
@@ -138,9 +139,17 @@ function parseHTML(html) {
             ovrRecord = cell;
           }
         }
-        // Check if it's a ranking number alone
-        else if (/^\d+$/.test(cell) && cell.length <= 2) {
-          apRank = parseInt(cell, 10);
+        // Check if it's a ranking number alone (could be AP or NET)
+        else if (/^\d+$/.test(cell)) {
+          const num = parseInt(cell, 10);
+          // AP ranks are typically 1-25
+          if (num <= 25 && cell.length <= 2) {
+            apRank = num;
+          }
+          // NET ranks are typically 1-350+
+          else if (num > 0 && num <= 400 && !netRank) {
+            netRank = num;
+          }
         }
         // Otherwise it's likely the team name
         else if (cell.length > 2 && !teamName) {
@@ -177,6 +186,7 @@ function parseHTML(html) {
         conf: confRecord,
         ovr: ovrRecord || confRecord,
         apRank,
+        netRank,
         wins: overallWins,
         losses: overallLosses,
         confWins,

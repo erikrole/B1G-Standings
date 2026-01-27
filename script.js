@@ -207,7 +207,7 @@ function calculateRetryDelay() {
 }
 
 function createTeamRow(rowData, index) {
-  const { team, conf, ovr, apRank, isWisconsin } = rowData;
+  const { team, conf, ovr, apRank, netRank, isWisconsin } = rowData;
   const currentPosition = index + 1;
 
   const row = document.createElement("div");
@@ -241,6 +241,7 @@ function createTeamRow(rowData, index) {
     <div class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
       <span class="team-name">${team}</span>
+      ${netRank ? `<span class="net-rank">${netRank}</span>` : ""}
       ${row.dataset.change ? `<span class="position-change-indicator">${row.dataset.change}</span>` : ""}
     </div>
     <div class="conf">${conf}</div>
