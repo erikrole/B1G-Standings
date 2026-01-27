@@ -1,6 +1,14 @@
 // =====================
 // CONFIG
 // =====================
+
+// Data source: set USE_WORKER to true after deploying Cloudflare Worker
+const USE_WORKER = false; // Change to true after worker deployment
+
+// Cloudflare Worker URL (update this after deploying worker)
+const WORKER_URL = "https://big-ten-standings.YOUR-ACCOUNT.workers.dev";
+
+// Fallback: Google Sheets CSV
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/1bOdPDPKf1QHUyayNgDToaCtu3k6_-bccnWLNqpyayvQ/export?format=csv&gid=1204601349";
 
@@ -241,78 +249,111 @@ async function loadStandings() {
   setLoadingState(true);
 
   try {
-    const res = await fetch(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
+    let teamRows;
 
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
+    if (USE_WORKER) {
+      // ===== CLOUDFLARE WORKER MODE =====
+      console.log("Fetching from Cloudflare Worker...");
+      const res = await fetch(`${WORKER_URL}?t=${Date.now()}`, { cache: "no-store" });
+
+      if (!res.ok) {
+        throw new Error(`Worker error: ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (!data.standings || data.standings.length === 0) {
+        throw new Error("No standings data from worker");
+      }
+
+      // Worker returns data in the right format, just add calculated fields
+      teamRows = data.standings.map(team => ({
+        ...team,
+        pct: calculateWinPercentage(team.wins, team.losses),
+        confPct: calculateWinPercentage(team.confWins, team.confLosses),
+        isWisconsin: team.team === "WISCONSIN",
+      }));
+
+      console.log(`✓ Loaded ${teamRows.length} teams from Worker`);
+
+    } else {
+      // ===== GOOGLE SHEETS CSV MODE (Fallback) =====
+      console.log("Fetching from Google Sheets CSV...");
+      const res = await fetch(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
+
+      if (!res.ok) {
+        throw new Error(`CSV error: ${res.status}`);
+      }
+
+      const text = await res.text();
+      const { headers, rows } = parseCSV(text);
+
+      // Map header names to column indexes
+      const headerToIndex = Object.fromEntries(
+        headers.map((h, idx) => [h.trim().toUpperCase(), idx])
+      );
+
+      const TEAM_COL   = headerToIndex["TEAM"];
+      const CONF_COL   = headerToIndex["CONF"];
+      const OVR_COL    = headerToIndex["OVR"];
+      const AP_COL     = headerToIndex["RANK"];
+      const WINS_COL   = headerToIndex["WINS"];
+      const LOSSES_COL = headerToIndex["LOSSES"];
+
+      // Basic validation
+      if (
+        TEAM_COL == null ||
+        CONF_COL == null ||
+        OVR_COL == null ||
+        WINS_COL == null ||
+        LOSSES_COL == null
+      ) {
+        console.error("Missing required columns:", headers);
+        showError("Missing columns in sheet");
+        return;
+      }
+
+      // Build team objects from CSV rows
+      teamRows = rows
+        .map((cols, originalIndex) => {
+          if (!cols.length) return null;
+
+          const teamRaw = (cols[TEAM_COL] || "").trim();
+          if (!teamRaw) return null;
+
+          const team = teamRaw.toUpperCase();
+          const confStr = toDash(cols[CONF_COL]);
+          const { wins: confWins, losses: confLosses } = parseRecord(confStr);
+          const confPct = calculateWinPercentage(confWins, confLosses);
+          const ovr  = toDash(cols[OVR_COL]);
+          const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
+          const apRank = apRaw ? parseInt(apRaw, 10) || NO_RANK_VALUE : NO_RANK_VALUE;
+
+          const wins = parseInt(cols[WINS_COL] || "0", 10);
+          const losses = parseInt(cols[LOSSES_COL] || "0", 10);
+          const pct = calculateWinPercentage(wins, losses);
+
+          return {
+            team,
+            conf: confStr,
+            ovr,
+            apRank,
+            wins,
+            losses,
+            pct,
+            confWins,
+            confLosses,
+            confPct,
+            isWisconsin: team === "WISCONSIN",
+            originalIndex
+          };
+        })
+        .filter(Boolean);
+
+      console.log(`✓ Loaded ${teamRows.length} teams from CSV`);
     }
 
-    const text = await res.text();
-
-    const { headers, rows } = parseCSV(text);
-
-    // Map header names to column indexes
-    const headerToIndex = Object.fromEntries(
-      headers.map((h, idx) => [h.trim().toUpperCase(), idx])
-    );
-
-    const TEAM_COL   = headerToIndex["TEAM"];
-    const CONF_COL   = headerToIndex["CONF"];
-    const OVR_COL    = headerToIndex["OVR"];
-    const AP_COL     = headerToIndex["RANK"];   // AP rank (optional)
-    const WINS_COL   = headerToIndex["WINS"];   // helper col in WN_CLEAN (required)
-    const LOSSES_COL = headerToIndex["LOSSES"]; // helper col in WN_CLEAN (required)
-
-    // Basic validation
-    if (
-      TEAM_COL == null ||
-      CONF_COL == null ||
-      OVR_COL == null ||
-      WINS_COL == null ||
-      LOSSES_COL == null
-    ) {
-      console.error("Missing required columns:", headers);
-      showError("Missing columns in sheet");
-      return;
-    }
-
-    // ---- Build objects from rows ----
-    const teamRows = rows
-      .map((cols, originalIndex) => {
-        if (!cols.length) return null;
-
-        const teamRaw = (cols[TEAM_COL] || "").trim();
-        if (!teamRaw) return null;
-
-        const team = teamRaw.toUpperCase();
-        const confStr = toDash(cols[CONF_COL]);
-        const { wins: confWins, losses: confLosses } = parseRecord(confStr);
-        const confPct = calculateWinPercentage(confWins, confLosses);
-        const ovr  = toDash(cols[OVR_COL]);
-        const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
-        const apRank = apRaw ? parseInt(apRaw, 10) || NO_RANK_VALUE : NO_RANK_VALUE;
-
-        const wins = parseInt(cols[WINS_COL] || "0", 10);
-        const losses = parseInt(cols[LOSSES_COL] || "0", 10);
-        const pct = calculateWinPercentage(wins, losses);
-
-        return {
-          team,
-          conf: confStr,
-          ovr,
-          apRank,
-          wins,
-          losses,
-          pct,
-          confWins,
-          confLosses,
-          confPct,
-          isWisconsin: team === "WISCONSIN",
-          originalIndex
-        };
-      })
-      .filter(Boolean);
-
+    // ===== COMMON: SORT AND RENDER =====
     teamRows.sort(compareTeams);
 
     // ---- Render ----
