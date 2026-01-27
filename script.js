@@ -107,7 +107,18 @@ function compareTeams(a, b) {
     return a.apRank - b.apRank;
   }
 
-  // 8) Alphabetical fallback
+  // 8) NET ranking: lower is better
+  const aHasNet = a.netRank != null;
+  const bHasNet = b.netRank != null;
+
+  if (aHasNet && !bHasNet) return -1;
+  if (bHasNet && !aHasNet) return 1;
+
+  if (aHasNet && bHasNet && a.netRank !== b.netRank) {
+    return a.netRank - b.netRank; // Lower NET rank is better
+  }
+
+  // 9) Alphabetical fallback (if all else is equal)
   return a.team.localeCompare(b.team);
 }
 

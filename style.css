@@ -310,10 +310,6 @@ body {
   font-size: var(--size-wisconsin-team);
 }
 
-.row.wisconsin .conf {
-  background-color: transparent; /* Remove darker box on Wisconsin row */
-}
-
 /* ========== FOOTER ========== */
 .footer {
   flex-shrink: 0;
