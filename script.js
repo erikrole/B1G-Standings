@@ -138,7 +138,7 @@ function updateDataSourceIndicator(isWorker) {
   const sourceEl = document.getElementById("data-source");
   if (sourceEl) {
     sourceEl.className = `data-source ${isWorker ? "worker" : "csv"}`;
-    sourceEl.title = isWorker ? "Cloudflare Worker" : "Google Sheets";
+    sourceEl.title = isWorker ? "Connected" : "CSV";
   }
 }
 
@@ -241,7 +241,7 @@ function createTeamRow(rowData, index) {
     <div class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
       <span class="team-name">${team}</span>
-      ${netRank ? `<span class="net-rank">${netRank}</span>` : ""}
+      ${netRank ? `<span class="net-rank">NET ${netRank}</span>` : ""}
       ${row.dataset.change ? `<span class="position-change-indicator">${row.dataset.change}</span>` : ""}
     </div>
     <div class="conf">${conf}</div>
