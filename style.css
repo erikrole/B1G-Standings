@@ -33,6 +33,7 @@
   src: url("Aeternus/01-aeternus_nano.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -40,6 +41,7 @@
   src: url("Aeternus/04-aeternus_heavy.ttf") format("truetype");
   font-weight: 900;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -47,6 +49,7 @@
   src: url("Aeternus/Wisconsin-Regular.ttf") format("truetype");
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -54,6 +57,7 @@
   src: url("Aeternus/Gotham-Bold.otf") format("opentype");
   font-weight: bold;
   font-style: normal;
+  font-display: swap;
 }
 
 @font-face {
@@ -61,6 +65,7 @@
   src: url("Aeternus/Gotham-Medium.otf") format("opentype");
   font-weight: 500;
   font-style: normal;
+  font-display: swap;
 }
 
 /* ========== GLOBAL LAYOUT ========== */
