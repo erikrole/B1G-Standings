@@ -348,3 +348,10 @@ body {
   opacity: 0.7;
   text-align: center;
 }
+
+/* ========== RESPONSIVE: MOBILE ========== */
+@media (max-width: 640px) {
+  .net-rank {
+    display: none;
+  }
+}
