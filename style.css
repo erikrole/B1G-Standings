@@ -118,6 +118,21 @@ body {
   width: 100%;
 }
 
+/* Data source indicator */
+.data-source {
+  font-size: 1.8vh;
+  margin-left: 0.5ch;
+  transition: color 0.3s ease;
+}
+
+.data-source.worker {
+  color: var(--color-online); /* Green */
+}
+
+.data-source.csv {
+  color: var(--color-warning); /* Yellow */
+}
+
 /* Connection status indicator */
 .connection-status {
   font-size: 1.8vh;
@@ -220,20 +235,30 @@ body {
 /* Team cell = AP rank + team name */
 .team-cell {
   position: relative;
-  padding-left: 1.6ch; /* reserve space for AP rank without shifting name */
+  padding-left: 2.5ch; /* more space for AP rank */
   display: block;
 }
 
 .ap-rank {
   position: absolute;
   left: 0;
-  top: 0.1em;
-  font-size: 0.6em;
-  opacity: 0.85;
-  transform: translateY(-0.05em);
+  top: 0;
+  font-size: 0.7em;
+  opacity: 0.9;
+  font-weight: bold;
   text-align: right;
   width: 2ch;
   font-family: var(--font-nano);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.net-rank {
+  font-size: 0.6em;
+  opacity: 0.7;
+  margin-left: 1ch;
+  font-family: var(--font-nano);
+  vertical-align: super;
+  font-weight: normal;
 }
 
 .team-name {
