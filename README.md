@@ -7,14 +7,15 @@ A real-time, auto-updating display board for Big Ten Conference men's basketball
 ## 🏀 Features
 
 ### Real-Time Updates
-- **Auto-refresh**: Standings update automatically every 15 minutes
+- **Auto-refresh**: Standings update automatically every 5 minutes
 - **Live connection status**: Visual indicator shows online/offline state
 - **Stale data alerts**: Warning if data hasn't updated in 30+ minutes
 
 ## 📊 Data Source
 
-Standings are pulled from a Google Sheets CSV export:
-- Automatic updates every 15 minutes
+Standings are pulled from a Cloudflare Worker endpoint (with Google Sheets CSV fallback):
+- Automatic updates every 5 minutes
+- Smart fallback to CSV when worker requests fail
 - Manual update available by refreshing the page
 
 ## 🛠️ Technology Stack
@@ -22,7 +23,7 @@ Standings are pulled from a Google Sheets CSV export:
 - **HTML5**: Semantic markup
 - **CSS3**: Custom properties, animations, responsive design
 - **Vanilla JavaScript**: No frameworks, pure ES6+
-- **Google Sheets**: Data source via CSV export
+- **Cloudflare Worker + Google Sheets**: Primary data source with resilient fallback
 
 ### Browser Compatibility
 

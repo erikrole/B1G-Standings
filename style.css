@@ -151,22 +151,6 @@ body {
   color: var(--color-warning); /* Yellow */
 }
 
-/* Connection status indicator */
-.connection-status {
-  font-size: 1.8vh;
-  margin-left: 0.5ch;
-  transition: color 0.3s ease;
-}
-
-.connection-status.online {
-  color: var(--color-online);
-}
-
-.connection-status.offline {
-  color: var(--color-offline);
-  animation: pulse 2s infinite;
-}
-
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
