@@ -140,15 +140,6 @@ function setLoadingState(isLoading) {
   }
 }
 
-function updateConnectionStatus(isOnline) {
-  const statusEl = document.getElementById("connection-status");
-  if (statusEl) {
-    statusEl.className = `connection-status ${isOnline ? "online" : "offline"}`;
-    statusEl.textContent = isOnline ? "●" : "○";
-    statusEl.title = isOnline ? "Connected" : "Offline";
-  }
-}
-
 function updateDataSourceIndicator(isWorker) {
   const sourceEl = document.getElementById("data-source");
   if (sourceEl) {
@@ -372,13 +363,11 @@ async function loadStandings() {
     lastSuccessfulUpdate = Date.now();
     retryCount = 0;
     updateTimestamp();
-    updateConnectionStatus(true);
     updateDataSourceIndicator(loadedFromWorker);
     setLoadingState(false);
   } catch (err) {
     console.error("Error loading CSV:", err);
     setLoadingState(false);
-    updateConnectionStatus(false);
 
     // Implement exponential backoff retry
     retryCount++;
@@ -521,12 +510,7 @@ document.addEventListener("visibilitychange", async () => {
 
 // Monitor online/offline status
 window.addEventListener("online", () => {
-  updateConnectionStatus(true);
   loadStandings();
-});
-
-window.addEventListener("offline", () => {
-  updateConnectionStatus(false);
 });
 
 // Update timestamp display every minute
