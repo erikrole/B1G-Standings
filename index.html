@@ -26,6 +26,12 @@
       </header>
 
       <main class="main">
+        <div class="table-header" aria-hidden="true">
+          <div class="col-rank">RK</div>
+          <div class="col-team">TEAM</div>
+          <div class="col-conf">CONF</div>
+          <div class="col-ovr">OVR</div>
+        </div>
         <div id="table" class="standings-table"></div>
       </main>
 
@@ -33,6 +39,7 @@
         <div class="brand">WISCONSIN BASKETBALL</div>
         <div class="timestamp-container">
           <span id="timestamp" class="timestamp"></span>
+          <span id="connection-status" class="connection-status online" title="Connected">●</span>
           <span id="data-source" class="data-source worker" title="Connected">●</span>
         </div>
       </footer>
