@@ -8,7 +8,7 @@ A real-time, auto-updating display board for Big Ten Conference men's basketball
 
 ### Real-Time Updates
 - **Auto-refresh**: Standings update automatically every 5 minutes
-- **Live connection status**: Visual indicator shows online/offline state
+- **Live data source status**: Green for Worker, yellow for CSV fallback
 - **Stale data alerts**: Warning if data hasn't updated in 30+ minutes
 
 ## 📊 Data Source
