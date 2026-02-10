@@ -3,9 +3,7 @@
   --color-white: #ffffff;
   --color-highlight-bg: rgba(36, 3, 3, 0.736);
   --color-border: rgba(255, 255, 255, 0.18);
-  --color-overlay: rgba(0, 0, 0, 0.35);
   --color-online: #4caf50;
-  --color-offline: #f44336;
   --color-warning: #ff9800;
   --color-moved-up: rgba(76, 175, 80, 0.3);
   --color-moved-down: rgba(244, 67, 54, 0.3);
@@ -76,13 +74,17 @@
 /* ========== GLOBAL LAYOUT ========== */
 html,
 body {
-  height: 100%;
+  min-height: 100%;
   margin: 0;
 }
 
 body {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   color: var(--color-white);
   font-family: var(--font-nano);
+  background: #5a0508;
 }
 
 .bg-image {
@@ -90,7 +92,9 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
   z-index: -1;
 }
 
@@ -103,9 +107,11 @@ body {
 
 .page {
   min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  padding: var(--spacing-page);
+  padding: 2vh 5vw calc(2vh + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
@@ -149,22 +155,6 @@ body {
 
 .data-source.csv {
   color: var(--color-warning); /* Yellow */
-}
-
-/* Connection status indicator */
-.connection-status {
-  font-size: 1.8vh;
-  margin-left: 0.5ch;
-  transition: color 0.3s ease;
-}
-
-.connection-status.online {
-  color: var(--color-online);
-}
-
-.connection-status.offline {
-  color: var(--color-offline);
-  animation: pulse 2s infinite;
 }
 
 @keyframes pulse {
