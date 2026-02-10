@@ -12,11 +12,13 @@ const WORKER_URL = "https://big-ten-standings.erikrole.workers.dev";
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/1bOdPDPKf1QHUyayNgDToaCtu3k6_-bccnWLNqpyayvQ/export?format=csv&gid=1204601349";
 
-const REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const NO_RANK_VALUE = 999;
 const STALE_DATA_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_RETRY_DELAY_MS = 5 * 60 * 1000; // 5 minutes max backoff
 const POSITION_CHANGE_DURATION_MS = 5000; // Highlight changes for 5 seconds
+const MAX_WORKER_FAILURES_BEFORE_FALLBACK = 2;
+const WORKER_RECOVERY_COOLDOWN_MS = 30 * 60 * 1000; // Retry worker after 30 min
 
 // =====================
 // STATE
@@ -26,6 +28,8 @@ let lastSuccessfulUpdate = null;
 let previousStandings = new Map(); // team -> position
 let retryCount = 0;
 let refreshTimer = null;
+let consecutiveWorkerFailures = 0;
+let workerFallbackUntil = 0;
 
 // =====================
 // CSV PARSING
@@ -133,15 +137,6 @@ function setLoadingState(isLoading) {
   const loadingEl = document.getElementById("loading-indicator");
   if (loadingEl) {
     loadingEl.style.display = isLoading ? "block" : "none";
-  }
-}
-
-function updateConnectionStatus(isOnline) {
-  const statusEl = document.getElementById("connection-status");
-  if (statusEl) {
-    statusEl.className = `connection-status ${isOnline ? "online" : "offline"}`;
-    statusEl.textContent = isOnline ? "●" : "○";
-    statusEl.title = isOnline ? "Connected" : "Offline";
   }
 }
 
@@ -322,107 +317,34 @@ async function loadStandings() {
 
   try {
     let teamRows;
+    let loadedFromWorker = false;
+    const canAttemptWorker = USE_WORKER && Date.now() >= workerFallbackUntil;
 
-    if (USE_WORKER) {
-      // ===== CLOUDFLARE WORKER MODE =====
-      console.log("Fetching from Cloudflare Worker...");
-      const res = await fetch(`${WORKER_URL}?t=${Date.now()}`, { cache: "no-store" });
+    if (canAttemptWorker) {
+      try {
+        teamRows = await loadFromWorker();
+        loadedFromWorker = true;
+        consecutiveWorkerFailures = 0;
+      } catch (workerErr) {
+        consecutiveWorkerFailures += 1;
+        console.error("Worker failed, attempting CSV fallback:", workerErr);
 
-      if (!res.ok) {
-        throw new Error(`Worker error: ${res.status}`);
+        if (consecutiveWorkerFailures >= MAX_WORKER_FAILURES_BEFORE_FALLBACK) {
+          workerFallbackUntil = Date.now() + WORKER_RECOVERY_COOLDOWN_MS;
+          console.warn(
+            `Worker fallback cooldown enabled until ${new Date(workerFallbackUntil).toLocaleTimeString()}`
+          );
+        }
+
+        teamRows = await loadFromCSV();
       }
-
-      const data = await res.json();
-
-      if (!data.standings || data.standings.length === 0) {
-        throw new Error("No standings data from worker");
-      }
-
-      // Worker returns data in the right format, just add calculated fields
-      teamRows = data.standings.map(team => ({
-        ...team,
-        pct: calculateWinPercentage(team.wins, team.losses),
-        confPct: calculateWinPercentage(team.confWins, team.confLosses),
-        isWisconsin: team.team === "WISCONSIN",
-      }));
-
-      console.log(`✓ Loaded ${teamRows.length} teams from Worker`);
-
     } else {
-      // ===== GOOGLE SHEETS CSV MODE (Fallback) =====
-      console.log("Fetching from Google Sheets CSV...");
-      const res = await fetch(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
+      teamRows = await loadFromCSV();
 
-      if (!res.ok) {
-        throw new Error(`CSV error: ${res.status}`);
+      if (USE_WORKER && workerFallbackUntil && Date.now() < workerFallbackUntil) {
+        const minutesRemaining = Math.ceil((workerFallbackUntil - Date.now()) / 60000);
+        console.log(`Using CSV while worker cools down (${minutesRemaining} min remaining)`);
       }
-
-      const text = await res.text();
-      const { headers, rows } = parseCSV(text);
-
-      // Map header names to column indexes
-      const headerToIndex = Object.fromEntries(
-        headers.map((h, idx) => [h.trim().toUpperCase(), idx])
-      );
-
-      const TEAM_COL   = headerToIndex["TEAM"];
-      const CONF_COL   = headerToIndex["CONF"];
-      const OVR_COL    = headerToIndex["OVR"];
-      const AP_COL     = headerToIndex["RANK"];
-      const WINS_COL   = headerToIndex["WINS"];
-      const LOSSES_COL = headerToIndex["LOSSES"];
-
-      // Basic validation
-      if (
-        TEAM_COL == null ||
-        CONF_COL == null ||
-        OVR_COL == null ||
-        WINS_COL == null ||
-        LOSSES_COL == null
-      ) {
-        console.error("Missing required columns:", headers);
-        showError("Missing columns in sheet");
-        return;
-      }
-
-      // Build team objects from CSV rows
-      teamRows = rows
-        .map((cols, originalIndex) => {
-          if (!cols.length) return null;
-
-          const teamRaw = (cols[TEAM_COL] || "").trim();
-          if (!teamRaw) return null;
-
-          const team = teamRaw.toUpperCase();
-          const confStr = toDash(cols[CONF_COL]);
-          const { wins: confWins, losses: confLosses } = parseRecord(confStr);
-          const confPct = calculateWinPercentage(confWins, confLosses);
-          const ovr  = toDash(cols[OVR_COL]);
-          const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
-          const apRank = apRaw ? parseInt(apRaw, 10) || NO_RANK_VALUE : NO_RANK_VALUE;
-
-          const wins = parseInt(cols[WINS_COL] || "0", 10);
-          const losses = parseInt(cols[LOSSES_COL] || "0", 10);
-          const pct = calculateWinPercentage(wins, losses);
-
-          return {
-            team,
-            conf: confStr,
-            ovr,
-            apRank,
-            wins,
-            losses,
-            pct,
-            confWins,
-            confLosses,
-            confPct,
-            isWisconsin: team === "WISCONSIN",
-            originalIndex
-          };
-        })
-        .filter(Boolean);
-
-      console.log(`✓ Loaded ${teamRows.length} teams from CSV`);
     }
 
     // ===== COMMON: SORT AND RENDER =====
@@ -441,13 +363,11 @@ async function loadStandings() {
     lastSuccessfulUpdate = Date.now();
     retryCount = 0;
     updateTimestamp();
-    updateConnectionStatus(true);
-    updateDataSourceIndicator(USE_WORKER);
+    updateDataSourceIndicator(loadedFromWorker);
     setLoadingState(false);
   } catch (err) {
     console.error("Error loading CSV:", err);
     setLoadingState(false);
-    updateConnectionStatus(false);
 
     // Implement exponential backoff retry
     retryCount++;
@@ -463,6 +383,104 @@ async function loadStandings() {
       showError("Error loading data - retrying...");
     }
   }
+}
+
+async function loadFromWorker() {
+  console.log("Fetching from Cloudflare Worker...");
+  const res = await fetch(`${WORKER_URL}?t=${Date.now()}`, { cache: "no-store" });
+
+  if (!res.ok) {
+    throw new Error(`Worker error: ${res.status}`);
+  }
+
+  const data = await res.json();
+
+  if (!data.standings || data.standings.length === 0) {
+    throw new Error("No standings data from worker");
+  }
+
+  const teamRows = data.standings.map(team => ({
+    ...team,
+    pct: calculateWinPercentage(team.wins, team.losses),
+    confPct: calculateWinPercentage(team.confWins, team.confLosses),
+    isWisconsin: team.team === "WISCONSIN",
+  }));
+
+  console.log(`✓ Loaded ${teamRows.length} teams from Worker`);
+  return teamRows;
+}
+
+async function loadFromCSV() {
+  console.log("Fetching from Google Sheets CSV...");
+  const res = await fetch(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
+
+  if (!res.ok) {
+    throw new Error(`CSV error: ${res.status}`);
+  }
+
+  const text = await res.text();
+  const { headers, rows } = parseCSV(text);
+
+  const headerToIndex = Object.fromEntries(
+    headers.map((h, idx) => [h.trim().toUpperCase(), idx])
+  );
+
+  const TEAM_COL = headerToIndex["TEAM"];
+  const CONF_COL = headerToIndex["CONF"];
+  const OVR_COL = headerToIndex["OVR"];
+  const AP_COL = headerToIndex["RANK"];
+  const WINS_COL = headerToIndex["WINS"];
+  const LOSSES_COL = headerToIndex["LOSSES"];
+
+  if (
+    TEAM_COL == null ||
+    CONF_COL == null ||
+    OVR_COL == null ||
+    WINS_COL == null ||
+    LOSSES_COL == null
+  ) {
+    console.error("Missing required columns:", headers);
+    throw new Error("Missing columns in CSV data");
+  }
+
+  const teamRows = rows
+    .map((cols, originalIndex) => {
+      if (!cols.length) return null;
+
+      const teamRaw = (cols[TEAM_COL] || "").trim();
+      if (!teamRaw) return null;
+
+      const team = teamRaw.toUpperCase();
+      const confStr = toDash(cols[CONF_COL]);
+      const { wins: confWins, losses: confLosses } = parseRecord(confStr);
+      const confPct = calculateWinPercentage(confWins, confLosses);
+      const ovr = toDash(cols[OVR_COL]);
+      const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
+      const apRank = apRaw ? parseInt(apRaw, 10) || NO_RANK_VALUE : NO_RANK_VALUE;
+
+      const wins = parseInt(cols[WINS_COL] || "0", 10);
+      const losses = parseInt(cols[LOSSES_COL] || "0", 10);
+      const pct = calculateWinPercentage(wins, losses);
+
+      return {
+        team,
+        conf: confStr,
+        ovr,
+        apRank,
+        wins,
+        losses,
+        pct,
+        confWins,
+        confLosses,
+        confPct,
+        isWisconsin: team === "WISCONSIN",
+        originalIndex,
+      };
+    })
+    .filter(Boolean);
+
+  console.log(`✓ Loaded ${teamRows.length} teams from CSV`);
+  return teamRows;
 }
 
 function scheduleNextRefresh() {
@@ -492,12 +510,7 @@ document.addEventListener("visibilitychange", async () => {
 
 // Monitor online/offline status
 window.addEventListener("online", () => {
-  updateConnectionStatus(true);
   loadStandings();
-});
-
-window.addEventListener("offline", () => {
-  updateConnectionStatus(false);
 });
 
 // Update timestamp display every minute
