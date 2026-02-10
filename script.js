@@ -144,7 +144,7 @@ function updateDataSourceIndicator(isWorker) {
   const sourceEl = document.getElementById("data-source");
   if (sourceEl) {
     sourceEl.className = `data-source ${isWorker ? "worker" : "csv"}`;
-    sourceEl.title = isWorker ? "Connected" : "CSV";
+    sourceEl.title = isWorker ? "Worker feed" : "CSV fallback";
   }
 }
 
