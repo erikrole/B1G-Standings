@@ -5,6 +5,7 @@
   --color-border: rgba(255, 255, 255, 0.18);
   --color-online: #4caf50;
   --color-warning: #ff9800;
+  --color-error: #f44336;
   --color-moved-up: rgba(76, 175, 80, 0.3);
   --color-moved-down: rgba(244, 67, 54, 0.3);
 
@@ -144,9 +145,10 @@ body {
 
 /* Data source indicator */
 .data-source {
-  font-size: 1.8vh;
-  margin-left: 0;
+  font-size: 1.4vh;
   transition: color 0.3s ease;
+  font-family: var(--font-gotham-medium);
+  letter-spacing: 0.04em;
 }
 
 .data-source.worker {
@@ -155,6 +157,10 @@ body {
 
 .data-source.csv {
   color: var(--color-warning); /* Yellow */
+}
+
+.data-source.failed {
+  color: var(--color-error); /* Red */
 }
 
 @keyframes pulse {
@@ -188,10 +194,6 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.14));
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1.2vh;
-  backdrop-filter: blur(1.5px);
   padding: 0.8vh 1vw 0.4vh;
 }
 
@@ -336,10 +338,6 @@ body {
   background: var(--color-highlight-bg);
   padding-top: 0.5vh;
   padding-bottom: 0.5vh;
-  margin-left: -1vw;
-  margin-right: -1vw;
-  padding-left: 1vw;
-  padding-right: 1vw;
 }
 
 .row.wisconsin .team-name {
@@ -399,8 +397,7 @@ body {
   .net-rank {
     display: none;
   }
-}
-@media (max-width: 640px) {
+
   .table-header {
     font-size: 1.35vh;
   }

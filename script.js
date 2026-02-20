@@ -144,7 +144,15 @@ function updateDataSourceIndicator(isWorker) {
   const sourceEl = document.getElementById("data-source");
   if (sourceEl) {
     sourceEl.className = `data-source ${isWorker ? "worker" : "csv"}`;
-    sourceEl.title = isWorker ? "Worker feed" : "CSV fallback";
+    sourceEl.textContent = `● ${isWorker ? "Connected" : "CSV"}`;
+  }
+}
+
+function setDataSourceFailed() {
+  const sourceEl = document.getElementById("data-source");
+  if (sourceEl) {
+    sourceEl.className = "data-source failed";
+    sourceEl.textContent = "● Failed";
   }
 }
 
@@ -368,6 +376,7 @@ async function loadStandings() {
   } catch (err) {
     console.error("Error loading CSV:", err);
     setLoadingState(false);
+    setDataSourceFailed();
 
     // Implement exponential backoff retry
     retryCount++;
