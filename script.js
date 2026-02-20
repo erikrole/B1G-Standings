@@ -144,7 +144,7 @@ function updateDataSourceIndicator(isWorker) {
   const sourceEl = document.getElementById("data-source");
   if (sourceEl) {
     sourceEl.className = `data-source ${isWorker ? "worker" : "csv"}`;
-    sourceEl.textContent = `● ${isWorker ? "Connected" : "CSV"}`;
+    sourceEl.dataset.label = isWorker ? "Connected" : "CSV";
   }
 }
 
@@ -152,7 +152,7 @@ function setDataSourceFailed() {
   const sourceEl = document.getElementById("data-source");
   if (sourceEl) {
     sourceEl.className = "data-source failed";
-    sourceEl.textContent = "● Failed";
+    sourceEl.dataset.label = "Failed";
   }
 }
 
