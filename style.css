@@ -19,7 +19,7 @@
   --size-team: 5vh;
   --size-row: 3.8vh;
   --size-record: 2.2vh;
-  --size-footer: 1.9vh;
+  --size-footer: 1.4vh;
   --size-wisconsin-team: 3.3vh;
 
   --spacing-column-gap: 2vw;
@@ -147,7 +147,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5ch;
-  font-size: 1.6vh;
+  font-size: 1.4vh;
   font-family: var(--font-gotham-medium);
   transition: color 0.3s ease;
 }
@@ -161,6 +161,9 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 0.9em;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
 .status-indicator.connected {
@@ -175,8 +178,8 @@ body {
   color: var(--color-error);
 }
 
-.data-source.failed {
-  color: var(--color-error); /* Red */
+.status-indicator:hover .status-label {
+  opacity: 1;
 }
 
 @keyframes pulse {
@@ -349,7 +352,7 @@ body {
   justify-content: space-between;
   align-items: flex-end;
   font-size: var(--size-footer);
-  opacity: 0.9;
+  opacity: 0.75;
   margin-top: 1.2vh;
 }
 
