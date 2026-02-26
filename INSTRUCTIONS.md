@@ -1,79 +1,52 @@
-I'm Boris and I created Claude Code. I wanted to quickly share a few tips for using Claude Code, sourced directly from the Claude Code team. The way the team uses Claude is different than how I use it. Remember: there is no one right way to use Claude Code -- everyones' setup is different. You should experiment to see what works for you!
+## Workflow Orchestration
 
-1. Do more in parallel
+### 1. Plan Node Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately - don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
 
-Spin up 3–5 git worktrees at once, each running its own Claude session in parallel. It's the single biggest productivity unlock, and the top tip from the team. Personally, I use multiple git checkouts, but most of the Claude Code team prefers worktrees -- it's the reason 
-@amorriscode
- built native support for them into the Claude Desktop app!
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One tack per subagent for focused execution
 
-Some people also name their worktrees and set up shell aliases (za, zb, zc) so they can hop between them in one keystroke. Others have a dedicated "analysis" worktree that's only for reading logs and running BigQuery
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
 
-2. Start every complex task in plan mode. Pour your energy into the plan so Claude can 1-shot the implementation.
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
 
-One person has one Claude write the plan, then they spin up a second Claude to review it as a staff engineer. 
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes - don't over-engineer
+- Challenge your own work before presenting it
 
-Another says the moment something goes sideways, they switch back to plan mode and re-plan. Don't keep pushing. They also explicitly tell Claude to enter plan mode for verification steps, not just for the build
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests - then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
 
-3. Invest in your http://CLAUDE.md. After every correction, end with: "Update your http://CLAUDE.md so you don't make that mistake again." Claude is eerily good at writing rules for itself.
+## Task Management
 
-Ruthlessly edit your http://CLAUDE.md over time. Keep iterating until Claude's mistake rate measurably drops.
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
 
-One engineer tells Claude to maintain a notes directory for every task/project, updated after every PR. They then point http://CLAUDE.md at it.
+## Core Principles
 
-4. Create your own skills and commit them to git. Reuse across every project.
-
-Tips from the team:
-- If you do something more than once a day, turn it into a skill or command
-- Build a /techdebt slash command and run it at the end of every session to find and kill duplicated code
-- Set up a slash command that syncs 7 days of Slack, GDrive, Asana, and GitHub into one context dump
-- Build analytics-engineer-style agents that write dbt models, review code, and test changes in dev
-
-5. Claude fixes most bugs by itself. Here's how we do it:
-
-Enable the Slack MCP, then paste a Slack bug thread into Claude and just say "fix." Zero context switching required.
-
-Or, just say "Go fix the failing CI tests." Don't micromanage how.
-
-Point Claude at docker logs to troubleshoot distributed systems -- it's surprisingly capable at this.
-
-6. Level up your prompting
-
-a. Challenge Claude. Say "Grill me on these changes and don't make a PR until I pass your test." Make Claude be your reviewer.  Or, say "Prove to me this works" and have Claude diff behavior between main and your feature branch
-
-b. After a mediocre fix, say: "Knowing everything you know now, scrap this and implement the elegant solution"
-
-c. Write detailed specs and reduce ambiguity before handing work off. The more specific you are, the better the output
-
-7. Terminal & Environment Setup
-
-The team loves Ghostty! Multiple people like its synchronized rendering, 24-bit color, and proper unicode support.
-
-For easier Claude-juggling, use /statusline to customize your status bar to always show context usage and current git branch. Many of us also color-code and name our terminal tabs, sometimes using tmux — one tab per task/worktree. 
-
-Use voice dictation. You speak 3x faster than you type, and your prompts get way more detailed as a result. (hit fn x2 on macOS)
-
-8. Use subagents
-
-a. Append "use subagents" to any request where you want Claude to throw more compute at the problem
-
-b. Offload individual tasks to subagents to keep your main agent's context window clean and focused
-
-c. Route permission requests to Opus 4.5 via a hook — let it scan for attacks and auto-approve the safe ones
-
-9. Use Claude for data & analytics
-
-Ask Claude Code to use the "bq" CLI to pull and analyze metrics on the fly. We have a BigQuery skill checked into the codebase, and everyone on the team uses it for anlytics queries directly in Claude Code. Personally, I haven't written a line of SQL in 6+ months.
-
-This works for any database that has a CLI, MCP, or API.
-
-10. Learning with Claude
-
-A few tips from the team to use Claude Code for learning:
-
-a. Enable the "Explanatory" or "Learning" output style in /config to have Claude explain the *why* behind its changes
-
-b. Have Claude generate a visual HTML presentation explaining unfamiliar code. It makes surprisingly good slides!
-
-c. Ask Claude to draw ASCII diagrams of new protocols and codebases to help you understand them
-
-d. Build a spaced-repetition learning skill: you explain your understanding, Claude asks follow-ups to fill gaps, stores the result
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimat Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
