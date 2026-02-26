@@ -140,19 +140,25 @@ function setLoadingState(isLoading) {
   }
 }
 
-function updateDataSourceIndicator(isWorker) {
-  const sourceEl = document.getElementById("data-source");
-  if (sourceEl) {
-    sourceEl.className = `data-source ${isWorker ? "worker" : "csv"}`;
-    sourceEl.dataset.label = isWorker ? "Connected" : "CSV";
-  }
-}
+function updateStatusIndicator(status) {
+  const statusEl = document.getElementById("status-indicator");
+  const labelEl = statusEl?.querySelector(".status-label");
 
-function setDataSourceFailed() {
-  const sourceEl = document.getElementById("data-source");
-  if (sourceEl) {
-    sourceEl.className = "data-source failed";
-    sourceEl.dataset.label = "Failed";
+  if (!statusEl || !labelEl) return;
+
+  // Remove all status classes
+  statusEl.classList.remove("connected", "csv", "failed");
+
+  // Add appropriate class and update label
+  if (status === "connected") {
+    statusEl.classList.add("connected");
+    labelEl.textContent = "Connected";
+  } else if (status === "csv") {
+    statusEl.classList.add("csv");
+    labelEl.textContent = "CSV";
+  } else if (status === "failed") {
+    statusEl.classList.add("failed");
+    labelEl.textContent = "Failed";
   }
 }
 
@@ -371,12 +377,12 @@ async function loadStandings() {
     lastSuccessfulUpdate = Date.now();
     retryCount = 0;
     updateTimestamp();
-    updateDataSourceIndicator(loadedFromWorker);
+    updateStatusIndicator(loadedFromWorker ? "connected" : "csv");
     setLoadingState(false);
   } catch (err) {
-    console.error("Error loading CSV:", err);
+    console.error("Error loading data:", err);
     setLoadingState(false);
-    setDataSourceFailed();
+    updateStatusIndicator("failed");
 
     // Implement exponential backoff retry
     retryCount++;
@@ -524,9 +530,6 @@ window.addEventListener("online", () => {
 
 // Update timestamp display every minute
 setInterval(updateTimestamp, 60 * 1000);
-
-// Set initial data source indicator
-updateDataSourceIndicator(USE_WORKER);
 
 // Initial load and scheduled refreshes
 loadStandings();
