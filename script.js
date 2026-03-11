@@ -67,6 +67,12 @@ function parseCSV(text) {
 // =====================
 const toDash = str => (str && str.trim()) || "";
 
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function parseRecord(str) {
   const clean = (str || "").replace(/[–—−]/g, "-");
   const [wRaw, lRaw] = clean.split("-");
@@ -129,7 +135,7 @@ function compareTeams(a, b) {
 function showError(message) {
   const tableEl = document.getElementById("table");
   if (tableEl) {
-    tableEl.innerHTML = `<div class="error-message">${message}</div>`;
+    tableEl.innerHTML = `<div class="error-message" role="alert">${escapeHTML(message)}</div>`;
   }
 }
 
@@ -256,16 +262,20 @@ function createTeamRow(rowData, index) {
     }, POSITION_CHANGE_DURATION_MS);
   }
 
+  const changeIndicator = row.dataset.change
+    ? `<span class="position-change-indicator">${escapeHTML(row.dataset.change)}</span>`
+    : "";
+
   row.innerHTML = `
     <div class="rank">${currentPosition}.</div>
     <div class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
-      <span class="team-name">${team}</span>
+      <span class="team-name">${escapeHTML(team)}</span>
       ${netRank ? `<span class="net-rank">NET ${netRank}</span>` : ""}
-      ${row.dataset.change ? `<span class="position-change-indicator">${row.dataset.change}</span>` : ""}
+      ${changeIndicator}
     </div>
-    <div class="conf">${conf}</div>
-    <div class="ovr">${ovr}</div>
+    <div class="conf">${escapeHTML(conf)}</div>
+    <div class="ovr">${escapeHTML(ovr)}</div>
   `;
 
   return row;
@@ -274,9 +284,25 @@ function createTeamRow(rowData, index) {
 // =====================
 // DOM DIFFING HELPERS
 // =====================
+function ensureTableHeader(tableEl) {
+  if (tableEl.querySelector('.table-header')) return;
+  const header = document.createElement("div");
+  header.className = "row table-header";
+  header.setAttribute("aria-hidden", "true");
+  header.innerHTML = `
+    <div class="rank"></div>
+    <div class="team-cell header-label">TEAM</div>
+    <div class="conf header-label">CONF</div>
+    <div class="ovr header-label">OVR</div>
+  `;
+  tableEl.prepend(header);
+}
+
 function updateTable(newTeamRows) {
   const tableEl = document.getElementById("table");
-  const existingRows = Array.from(tableEl.querySelectorAll('.row'));
+  if (!tableEl) return;
+  ensureTableHeader(tableEl);
+  const existingRows = Array.from(tableEl.querySelectorAll('.row:not(.table-header)'));
 
   newTeamRows.forEach((rowData, index) => {
     const existingRow = existingRows[index];
@@ -471,7 +497,8 @@ async function loadFromCSV() {
       const confPct = calculateWinPercentage(confWins, confLosses);
       const ovr = toDash(cols[OVR_COL]);
       const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
-      const apRank = apRaw ? parseInt(apRaw, 10) || NO_RANK_VALUE : NO_RANK_VALUE;
+      const apParsed = apRaw ? parseInt(apRaw, 10) : NaN;
+      const apRank = Number.isFinite(apParsed) ? apParsed : NO_RANK_VALUE;
 
       const wins = parseInt(cols[WINS_COL] || "0", 10);
       const losses = parseInt(cols[LOSSES_COL] || "0", 10);
@@ -523,9 +550,11 @@ document.addEventListener("visibilitychange", async () => {
   }
 });
 
-// Monitor online/offline status
+// Monitor online/offline status (debounced to avoid rapid-fire fetches)
+let onlineDebounceTimer = null;
 window.addEventListener("online", () => {
-  loadStandings();
+  clearTimeout(onlineDebounceTimer);
+  onlineDebounceTimer = setTimeout(() => loadStandings(), 300);
 });
 
 // Update timestamp display every minute
