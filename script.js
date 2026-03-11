@@ -67,10 +67,9 @@ function parseCSV(text) {
 // =====================
 const toDash = str => (str && str.trim()) || "";
 
+const _escapeMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function escapeHTML(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
+  return String(str).replace(/[&<>"']/g, c => _escapeMap[c]);
 }
 
 function parseRecord(str) {
@@ -136,6 +135,7 @@ function showError(message) {
   const tableEl = document.getElementById("table");
   if (tableEl) {
     tableEl.innerHTML = `<div class="error-message" role="alert">${escapeHTML(message)}</div>`;
+    headerInserted = false;
   }
 }
 
@@ -284,8 +284,9 @@ function createTeamRow(rowData, index) {
 // =====================
 // DOM DIFFING HELPERS
 // =====================
+let headerInserted = false;
 function ensureTableHeader(tableEl) {
-  if (tableEl.querySelector('.table-header')) return;
+  if (headerInserted) return;
   const header = document.createElement("div");
   header.className = "row table-header";
   header.setAttribute("aria-hidden", "true");
@@ -296,6 +297,7 @@ function ensureTableHeader(tableEl) {
     <div class="ovr header-label">OVR</div>
   `;
   tableEl.prepend(header);
+  headerInserted = true;
 }
 
 function updateTable(newTeamRows) {

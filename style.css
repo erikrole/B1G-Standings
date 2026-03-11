@@ -269,13 +269,13 @@ body {
   margin-bottom: 0.2vh;
 }
 
-.header-label {
-  font-family: var(--font-gotham-medium) !important;
-  font-size: 1.4vh !important;
+.row.table-header .header-label {
+  font-family: var(--font-gotham-medium);
+  font-size: 1.4vh;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   opacity: 0.6;
-  padding-left: 0 !important;
+  padding-left: 0;
 }
 
 .rank {
