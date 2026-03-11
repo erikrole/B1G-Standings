@@ -162,8 +162,7 @@ body {
   letter-spacing: 0.05em;
   font-size: 0.9em;
   opacity: 0;
-  transition: opacity 0.2s ease;
-  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
 .status-indicator.connected {
@@ -176,6 +175,12 @@ body {
 
 .status-indicator.failed {
   color: var(--color-error);
+}
+
+/* Always show label for non-connected states so users know data may be stale */
+.status-indicator.csv .status-label,
+.status-indicator.failed .status-label {
+  opacity: 1;
 }
 
 .status-indicator:hover .status-label {
@@ -255,6 +260,22 @@ body {
   100% {
     transform: scale(1);
   }
+}
+
+/* Table header row */
+.row.table-header {
+  border-bottom: 2px solid var(--color-border);
+  padding-bottom: 0.5vh;
+  margin-bottom: 0.2vh;
+}
+
+.header-label {
+  font-family: var(--font-gotham-medium) !important;
+  font-size: 1.4vh !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.6;
+  padding-left: 0 !important;
 }
 
 .rank {
@@ -381,8 +402,8 @@ body {
 
 /* Error message styling */
 .error-message {
-  padding-top: 20px;
-  font-size: 24px;
+  padding-top: 3vh;
+  font-size: var(--size-row);
   opacity: 0.7;
   text-align: center;
 }

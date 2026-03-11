@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <title>B1G Standings</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Live Big Ten men's basketball standings with conference and overall records, AP rankings, and NET rankings." />
+    <meta property="og:title" content="B1G Standings" />
+    <meta property="og:description" content="Live Big Ten men's basketball standings with AP and NET rankings." />
+    <meta property="og:type" content="website" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -23,21 +27,21 @@
           </picture>
           <h1>STANDINGS</h1>
         </div>
-        <div id="loading-indicator" class="loading-indicator">
+        <div id="loading-indicator" class="loading-indicator" role="status" aria-label="Loading standings">
           <div class="spinner"></div>
         </div>
       </header>
 
       <main class="main">
-        <div id="table" class="standings-table"></div>
+        <div id="table" class="standings-table" role="table" aria-label="Big Ten basketball standings"></div>
       </main>
 
       <footer class="footer">
         <div class="brand">WISCONSIN BASKETBALL</div>
         <div class="timestamp-container">
           <span id="timestamp" class="timestamp"></span>
-          <span id="status-indicator" class="status-indicator connected">
-            <span class="status-dot">●</span>
+          <span id="status-indicator" class="status-indicator connected" role="status" aria-live="polite">
+            <span class="status-dot" aria-hidden="true">●</span>
             <span class="status-label">Connected</span>
           </span>
         </div>
