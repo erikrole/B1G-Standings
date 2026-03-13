@@ -67,10 +67,9 @@ function parseCSV(text) {
 // =====================
 const toDash = str => (str && str.trim()) || "";
 
+const _escapeMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 function escapeHTML(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
+  return String(str).replace(/[&<>"']/g, c => _escapeMap[c]);
 }
 
 function parseRecord(str) {
@@ -136,7 +135,32 @@ function showError(message) {
   const tableEl = document.getElementById("table");
   if (tableEl) {
     tableEl.innerHTML = `<div class="error-message" role="alert">${escapeHTML(message)}</div>`;
+    headerInserted = false;
+    firstRender = true;
   }
+}
+
+function showSkeleton() {
+  const tableEl = document.getElementById("table");
+  if (!tableEl || tableEl.querySelector(".row")) return; // only show on empty table
+  const count = 18; // approximate B1G team count
+  for (let i = 0; i < count; i++) {
+    const row = document.createElement("div");
+    row.className = "skeleton-row";
+    row.innerHTML = `
+      <div class="skeleton-bar skeleton-rank"></div>
+      <div class="skeleton-bar skeleton-team"></div>
+      <div class="skeleton-bar skeleton-conf"></div>
+      <div class="skeleton-bar skeleton-ovr"></div>
+    `;
+    tableEl.appendChild(row);
+  }
+}
+
+function clearSkeleton() {
+  const tableEl = document.getElementById("table");
+  if (!tableEl) return;
+  tableEl.querySelectorAll(".skeleton-row").forEach(el => el.remove());
 }
 
 function setLoadingState(isLoading) {
@@ -284,8 +308,10 @@ function createTeamRow(rowData, index) {
 // =====================
 // DOM DIFFING HELPERS
 // =====================
+let headerInserted = false;
+let firstRender = true;
 function ensureTableHeader(tableEl) {
-  if (tableEl.querySelector('.table-header')) return;
+  if (headerInserted) return;
   const header = document.createElement("div");
   header.className = "row table-header";
   header.setAttribute("aria-hidden", "true");
@@ -296,6 +322,7 @@ function ensureTableHeader(tableEl) {
     <div class="ovr header-label">OVR</div>
   `;
   tableEl.prepend(header);
+  headerInserted = true;
 }
 
 function updateTable(newTeamRows) {
@@ -309,7 +336,12 @@ function updateTable(newTeamRows) {
 
     if (!existingRow) {
       // New row - append
-      tableEl.appendChild(createTeamRow(rowData, index));
+      const newRow = createTeamRow(rowData, index);
+      if (firstRender) {
+        newRow.classList.add("row-enter");
+        newRow.style.setProperty("--row-index", index);
+      }
+      tableEl.appendChild(newRow);
     } else if (needsUpdate(existingRow, rowData, index)) {
       // Replace row if data changed
       const newRow = createTeamRow(rowData, index);
@@ -323,6 +355,8 @@ function updateTable(newTeamRows) {
     tableEl.removeChild(existingRows[existingRows.length - 1]);
     existingRows.pop();
   }
+
+  firstRender = false;
 }
 
 function needsUpdate(row, newData, newIndex) {
@@ -354,6 +388,7 @@ function needsUpdate(row, newData, newIndex) {
 // =====================
 async function loadStandings() {
   setLoadingState(true);
+  showSkeleton();
 
   try {
     let teamRows;
@@ -391,6 +426,7 @@ async function loadStandings() {
     teamRows.sort(compareTeams);
 
     // ---- Render ----
+    clearSkeleton();
     updateTable(teamRows);
 
     // Update standings tracking for next comparison
@@ -407,6 +443,7 @@ async function loadStandings() {
     setLoadingState(false);
   } catch (err) {
     console.error("Error loading data:", err);
+    clearSkeleton();
     setLoadingState(false);
     updateStatusIndicator("failed");
 
