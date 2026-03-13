@@ -237,6 +237,10 @@ body {
   transition: background-color 0.5s ease, transform 0.3s ease;
 }
 
+.row:nth-child(even):not(.table-header):not(.wisconsin) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
 /* Position change animations */
 .row.position-changed {
   animation: highlight 5s ease-out;
@@ -339,6 +343,23 @@ body {
   to { opacity: 0.9; transform: translateY(0); }
 }
 
+/* Staggered row entrance */
+.row.row-enter {
+  animation: rowSlideIn 0.35s ease-out both;
+  animation-delay: calc(var(--row-index, 0) * 40ms);
+}
+
+@keyframes rowSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.8em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .conf,
 .ovr {
   text-align: center;
@@ -398,6 +419,38 @@ body {
 .timestamp.stale {
   color: var(--color-warning);
   animation: pulse 2s infinite;
+}
+
+/* Loading skeleton */
+.skeleton-row {
+  display: grid;
+  grid-template-columns: minmax(3ch, 6ch) 1fr minmax(7ch, 10ch) minmax(7ch, 10ch);
+  column-gap: var(--spacing-column-gap);
+  align-items: center;
+  padding: 0.3vh 0;
+  border-bottom: 1px solid var(--color-border);
+  height: var(--size-row);
+}
+
+.skeleton-bar {
+  height: 0.55em;
+  border-radius: 0.2em;
+  background: rgba(255, 255, 255, 0.08);
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton-row:nth-child(even) .skeleton-bar {
+  animation-delay: 0.15s;
+}
+
+.skeleton-row .skeleton-rank { width: 60%; }
+.skeleton-row .skeleton-team { width: 55%; }
+.skeleton-row .skeleton-conf { width: 70%; margin: 0 auto; }
+.skeleton-row .skeleton-ovr  { width: 70%; margin: 0 auto; }
+
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
 /* Error message styling */
