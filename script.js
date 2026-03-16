@@ -160,13 +160,27 @@ function showSkeleton() {
 function clearSkeleton() {
   const tableEl = document.getElementById("table");
   if (!tableEl) return;
-  tableEl.querySelectorAll(".skeleton-row").forEach(el => el.remove());
+  const skeletons = tableEl.querySelectorAll(".skeleton-row");
+  skeletons.forEach(el => {
+    el.style.opacity = "0";
+    el.addEventListener("transitionend", () => el.remove(), { once: true });
+  });
+  // Fallback removal in case transitionend doesn't fire
+  setTimeout(() => skeletons.forEach(el => el.remove()), 300);
 }
 
-function setLoadingState(isLoading) {
+let isLoading = false;
+
+function setLoadingState(loading) {
+  isLoading = loading;
   const loadingEl = document.getElementById("loading-indicator");
   if (loadingEl) {
-    loadingEl.style.display = isLoading ? "block" : "none";
+    loadingEl.style.display = loading ? "block" : "none";
+  }
+  const refreshBtn = document.getElementById("refresh-btn");
+  if (refreshBtn) {
+    refreshBtn.disabled = loading;
+    refreshBtn.classList.toggle("spinning", loading);
   }
 }
 
@@ -266,6 +280,7 @@ function createTeamRow(rowData, index) {
   row.dataset.team = team;
 
   // Check if position changed
+  let changeText = "";
   const previousPosition = previousStandings.get(team);
   if (previousPosition !== undefined && previousPosition !== currentPosition) {
     const positionChange = previousPosition - currentPosition;
@@ -273,21 +288,22 @@ function createTeamRow(rowData, index) {
 
     if (positionChange > 0) {
       row.classList.add("moved-up");
-      row.dataset.change = `↑${positionChange}`;
+      changeText = `↑${positionChange}`;
     } else {
       row.classList.add("moved-down");
-      row.dataset.change = `↓${Math.abs(positionChange)}`;
+      changeText = `↓${Math.abs(positionChange)}`;
     }
 
     // Remove highlight after duration
     setTimeout(() => {
       row.classList.remove("position-changed", "moved-up", "moved-down");
-      delete row.dataset.change;
+      const indicator = row.querySelector(".position-change-indicator");
+      if (indicator) indicator.remove();
     }, POSITION_CHANGE_DURATION_MS);
   }
 
-  const changeIndicator = row.dataset.change
-    ? `<span class="position-change-indicator">${escapeHTML(row.dataset.change)}</span>`
+  const changeIndicator = changeText
+    ? `<span class="position-change-indicator" aria-label="Moved ${changeText[0] === "↑" ? "up" : "down"} ${changeText.slice(1)} position${changeText.slice(1) === "1" ? "" : "s"}">${escapeHTML(changeText)}</span>`
     : "";
 
   row.innerHTML = `
@@ -295,7 +311,7 @@ function createTeamRow(rowData, index) {
     <div class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
       <span class="team-name">${escapeHTML(team)}</span>
-      ${netRank ? `<span class="net-rank">NET ${netRank}</span>` : ""}
+      ${netRank != null ? `<span class="net-rank">NET ${netRank}</span>` : ""}
       ${changeIndicator}
     </div>
     <div class="conf">${escapeHTML(conf)}</div>
@@ -351,9 +367,9 @@ function updateTable(newTeamRows) {
   });
 
   // Remove excess rows if teams were removed
-  while (existingRows.length > newTeamRows.length) {
-    tableEl.removeChild(existingRows[existingRows.length - 1]);
-    existingRows.pop();
+  const allRows = tableEl.querySelectorAll('.row:not(.table-header)');
+  for (let i = newTeamRows.length; i < allRows.length; i++) {
+    allRows[i].remove();
   }
 
   firstRender = false;
@@ -371,7 +387,7 @@ function needsUpdate(row, newData, newIndex) {
   const expectedApRank = newData.apRank < NO_RANK_VALUE ? String(newData.apRank) : '';
 
   const currentNetRank = netRankSpan ? netRankSpan.textContent : '';
-  const expectedNetRank = newData.netRank ? `NET ${newData.netRank}` : '';
+  const expectedNetRank = newData.netRank != null ? `NET ${newData.netRank}` : '';
 
   return (
     row.dataset.team !== newData.team ||
@@ -534,7 +550,7 @@ async function loadFromCSV() {
       const confPct = calculateWinPercentage(confWins, confLosses);
       const ovr = toDash(cols[OVR_COL]);
       const apRaw = AP_COL != null ? String(cols[AP_COL] || "").trim() : "";
-      const apParsed = apRaw ? parseInt(apRaw, 10) : NaN;
+      const apParsed = apRaw !== "" ? parseInt(apRaw, 10) : NaN;
       const apRank = Number.isFinite(apParsed) ? apParsed : NO_RANK_VALUE;
 
       const wins = parseInt(cols[WINS_COL] || "0", 10);
@@ -576,6 +592,17 @@ function scheduleNextRefresh() {
 // =====================
 // INIT + AUTO REFRESH
 // =====================
+
+// Manual refresh button
+const refreshBtn = document.getElementById("refresh-btn");
+if (refreshBtn) {
+  refreshBtn.addEventListener("click", () => {
+    if (!isLoading) {
+      loadStandings();
+      scheduleNextRefresh(); // Reset the auto-refresh timer
+    }
+  });
+}
 
 // Request wake lock to keep screen on
 requestWakeLock();
