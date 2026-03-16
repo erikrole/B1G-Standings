@@ -161,7 +161,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 0.9em;
-  opacity: 0;
+  opacity: 0.7;
   transition: opacity 0.3s ease;
 }
 
@@ -238,7 +238,7 @@ body {
 }
 
 .row:nth-child(even):not(.table-header):not(.wisconsin) {
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* Position change animations */
@@ -461,9 +461,92 @@ body {
   text-align: center;
 }
 
+/* ========== SKELETON TRANSITION ========== */
+.skeleton-row {
+  transition: opacity 0.2s ease;
+}
+
+/* ========== REFRESH BUTTON ========== */
+.refresh-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.6em;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  padding: 0 0.3ch;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.refresh-btn:hover {
+  opacity: 1;
+}
+
+.refresh-btn:disabled {
+  cursor: default;
+}
+
+.refresh-btn.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* ========== ROW HOVER (desktop only) ========== */
+@media (hover: hover) {
+  .row:not(.table-header):hover {
+    background-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* ========== RESPONSIVE: TABLET ========== */
+@media (max-width: 768px) {
+  :root {
+    --size-header: 10vh;
+    --size-team: 4.2vh;
+    --size-wisconsin-team: 2.8vh;
+    --spacing-column-gap: 1.5vw;
+  }
+}
+
 /* ========== RESPONSIVE: MOBILE ========== */
 @media (max-width: 640px) {
   .net-rank {
     display: none;
+  }
+}
+
+/* ========== RESPONSIVE: SMALL PHONE ========== */
+@media (max-width: 480px) {
+  :root {
+    --size-header: 8vh;
+    --size-team: 3.5vh;
+    --size-row: 3.2vh;
+    --size-wisconsin-team: 2.4vh;
+    --size-record: 1.9vh;
+    --size-footer: 1.2vh;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5vh;
+  }
+
+  .timestamp-container {
+    text-align: center;
+  }
+
+  .b1g-logo {
+    height: 8vh;
+  }
+}
+
+/* ========== ACCESSIBILITY: REDUCED MOTION ========== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
