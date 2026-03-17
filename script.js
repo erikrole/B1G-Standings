@@ -22,14 +22,34 @@ const DEBUG = false; // Set to true to enable debug logging
 // =====================
 // STATE
 // =====================
-const positionChangeTimers = new Map(); // team -> timeout ID
-let wakeLock = null;
-let lastSuccessfulUpdate = null;
-let previousStandings = new Map(); // team -> position
-let retryCount = 0;
-let refreshTimer = null;
-let consecutiveWorkerFailures = 0;
-let workerFallbackUntil = 0;
+const state = {
+  wakeLock: null,
+  lastSuccessfulUpdate: null,
+  previousStandings: new Map(),
+  positionChangeTimers: new Map(),
+  retryCount: 0,
+  refreshTimer: null,
+  consecutiveWorkerFailures: 0,
+  workerFallbackUntil: 0,
+  headerInserted: false,
+  firstRender: true,
+  isLoading: false,
+  onlineDebounceTimer: null,
+};
+
+// =====================
+// CACHED DOM REFERENCES
+// =====================
+const dom = {
+  table: document.getElementById("table"),
+  tableHead: document.getElementById("table-head"),
+  tableBody: document.getElementById("table-body"),
+  loadingIndicator: document.getElementById("loading-indicator"),
+  refreshBtn: document.getElementById("refresh-btn"),
+  statusIndicator: document.getElementById("status-indicator"),
+  statusLabel: document.getElementById("status-indicator")?.querySelector(".status-label"),
+  timestamp: document.getElementById("timestamp"),
+};
 
 // =====================
 // CSV PARSING
@@ -124,7 +144,7 @@ function compareTeams(a, b) {
   if (bHasNet && !aHasNet) return 1;
 
   if (aHasNet && bHasNet && a.netRank !== b.netRank) {
-    return a.netRank - b.netRank; // Lower NET rank is better
+    return a.netRank - b.netRank;
   }
 
   // 9) Alphabetical fallback (if all else is equal)
@@ -132,41 +152,34 @@ function compareTeams(a, b) {
 }
 
 // =====================
-// DOM DIFFING HELPERS
+// DOM HELPERS
 // =====================
-let headerInserted = false;
-let firstRender = true;
-
 function showError(message) {
-  const tableEl = document.getElementById("table");
-  if (tableEl) {
-    tableEl.innerHTML = `<div class="error-message" role="alert">${escapeHTML(message)}</div>`;
-    headerInserted = false;
-    firstRender = true;
-  }
+  if (!dom.tableBody) return;
+  dom.tableBody.innerHTML = `<tr><td colspan="4" class="error-message" role="alert">${escapeHTML(message)}</td></tr>`;
+  state.headerInserted = false;
+  state.firstRender = true;
 }
 
 function showSkeleton() {
-  const tableEl = document.getElementById("table");
-  if (!tableEl || tableEl.querySelector(".row")) return; // only show on empty table
-  const count = 18; // approximate B1G team count
+  if (!dom.tableBody || dom.tableBody.querySelector(".row")) return;
+  const count = 18;
   for (let i = 0; i < count; i++) {
-    const row = document.createElement("div");
+    const row = document.createElement("tr");
     row.className = "skeleton-row";
     row.innerHTML = `
-      <div class="skeleton-bar skeleton-rank"></div>
-      <div class="skeleton-bar skeleton-team"></div>
-      <div class="skeleton-bar skeleton-conf"></div>
-      <div class="skeleton-bar skeleton-ovr"></div>
+      <td><div class="skeleton-bar skeleton-rank"></div></td>
+      <td><div class="skeleton-bar skeleton-team"></div></td>
+      <td><div class="skeleton-bar skeleton-conf"></div></td>
+      <td><div class="skeleton-bar skeleton-ovr"></div></td>
     `;
-    tableEl.appendChild(row);
+    dom.tableBody.appendChild(row);
   }
 }
 
 function clearSkeleton() {
-  const tableEl = document.getElementById("table");
-  if (!tableEl) return;
-  const skeletons = tableEl.querySelectorAll(".skeleton-row");
+  if (!dom.tableBody) return;
+  const skeletons = dom.tableBody.querySelectorAll(".skeleton-row");
   skeletons.forEach(el => {
     el.style.opacity = "0";
     el.addEventListener("transitionend", () => el.remove(), { once: true });
@@ -175,60 +188,49 @@ function clearSkeleton() {
   setTimeout(() => skeletons.forEach(el => el.remove()), 300);
 }
 
-let isLoading = false;
-
 function setLoadingState(loading) {
-  isLoading = loading;
-  const loadingEl = document.getElementById("loading-indicator");
-  if (loadingEl) {
-    loadingEl.style.display = loading ? "block" : "none";
+  state.isLoading = loading;
+  if (dom.loadingIndicator) {
+    dom.loadingIndicator.style.display = loading ? "block" : "none";
   }
-  const refreshBtn = document.getElementById("refresh-btn");
-  if (refreshBtn) {
-    refreshBtn.disabled = loading;
-    refreshBtn.classList.toggle("spinning", loading);
+  if (dom.refreshBtn) {
+    dom.refreshBtn.disabled = loading;
+    dom.refreshBtn.classList.toggle("spinning", loading);
   }
 }
 
 function updateStatusIndicator(status) {
-  const statusEl = document.getElementById("status-indicator");
-  const labelEl = statusEl?.querySelector(".status-label");
+  if (!dom.statusIndicator || !dom.statusLabel) return;
 
-  if (!statusEl || !labelEl) return;
+  dom.statusIndicator.classList.remove("connected", "csv", "failed");
 
-  // Remove all status classes
-  statusEl.classList.remove("connected", "csv", "failed");
-
-  // Add appropriate class and update label
   if (status === "connected") {
-    statusEl.classList.add("connected");
-    labelEl.textContent = "Connected";
+    dom.statusIndicator.classList.add("connected");
+    dom.statusLabel.textContent = "Connected";
   } else if (status === "csv") {
-    statusEl.classList.add("csv");
-    labelEl.textContent = "CSV";
+    dom.statusIndicator.classList.add("csv");
+    dom.statusLabel.textContent = "CSV";
   } else if (status === "failed") {
-    statusEl.classList.add("failed");
-    labelEl.textContent = "Failed";
+    dom.statusIndicator.classList.add("failed");
+    dom.statusLabel.textContent = "Failed";
   }
 }
 
 function updateTimestamp() {
-  const ts = document.getElementById("timestamp");
-  if (!ts) return;
+  if (!dom.timestamp) return;
 
-  if (!lastSuccessfulUpdate) {
-    ts.textContent = "Waiting for data...";
-    ts.className = "timestamp";
+  if (!state.lastSuccessfulUpdate) {
+    dom.timestamp.textContent = "Waiting for data...";
+    dom.timestamp.className = "timestamp";
     return;
   }
 
   const now = Date.now();
-  const timeSinceUpdate = now - lastSuccessfulUpdate;
+  const timeSinceUpdate = now - state.lastSuccessfulUpdate;
   const isStale = timeSinceUpdate > STALE_DATA_THRESHOLD_MS;
 
-  const updateDate = new Date(lastSuccessfulUpdate);
+  const updateDate = new Date(state.lastSuccessfulUpdate);
 
-  // Format as relative date
   const nowDate = new Date(now);
   const isToday = updateDate.toDateString() === nowDate.toDateString();
   const isYesterday = new Date(now - 86400000).toDateString() === updateDate.toDateString();
@@ -251,17 +253,17 @@ function updateTimestamp() {
     });
   }
 
-  ts.textContent = `Last updated ${datePrefix} at ${timeString}`;
-  ts.className = isStale ? "timestamp stale" : "timestamp";
+  dom.timestamp.textContent = `Last updated ${datePrefix} at ${timeString}`;
+  dom.timestamp.className = isStale ? "timestamp stale" : "timestamp";
 }
 
 async function requestWakeLock() {
   if ("wakeLock" in navigator) {
     try {
-      wakeLock = await navigator.wakeLock.request("screen");
+      state.wakeLock = await navigator.wakeLock.request("screen");
       if (DEBUG) console.log("Wake lock acquired");
 
-      wakeLock.addEventListener("release", () => {
+      state.wakeLock.addEventListener("release", () => {
         if (DEBUG) console.log("Wake lock released");
       });
     } catch (err) {
@@ -271,9 +273,8 @@ async function requestWakeLock() {
 }
 
 function calculateRetryDelay() {
-  const baseDelay = 1000; // 1 second
-  const delay = Math.min(baseDelay * Math.pow(2, retryCount), MAX_RETRY_DELAY_MS);
-  return delay;
+  const baseDelay = 1000;
+  return Math.min(baseDelay * Math.pow(2, state.retryCount), MAX_RETRY_DELAY_MS);
 }
 
 function fetchWithTimeout(url, options = {}) {
@@ -282,18 +283,21 @@ function fetchWithTimeout(url, options = {}) {
   return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
 }
 
+// =====================
+// TABLE RENDERING
+// =====================
 function createTeamRow(rowData, index) {
   const { team, conf, ovr, apRank, netRank, isWisconsin } = rowData;
   const currentPosition = index + 1;
 
-  const row = document.createElement("div");
+  const row = document.createElement("tr");
   row.className = "row";
   if (isWisconsin) row.classList.add("wisconsin");
   row.dataset.team = team;
 
   // Check if position changed
   let changeText = "";
-  const previousPosition = previousStandings.get(team);
+  const previousPosition = state.previousStandings.get(team);
   if (previousPosition !== undefined && previousPosition !== currentPosition) {
     const positionChange = previousPosition - currentPosition;
     row.classList.add("position-changed");
@@ -307,7 +311,7 @@ function createTeamRow(rowData, index) {
     }
 
     // Clear any existing animation timer for this team
-    const existingTimer = positionChangeTimers.get(team);
+    const existingTimer = state.positionChangeTimers.get(team);
     if (existingTimer) clearTimeout(existingTimer);
 
     // Remove highlight after duration
@@ -315,9 +319,9 @@ function createTeamRow(rowData, index) {
       row.classList.remove("position-changed", "moved-up", "moved-down");
       const indicator = row.querySelector(".position-change-indicator");
       if (indicator) indicator.remove();
-      positionChangeTimers.delete(team);
+      state.positionChangeTimers.delete(team);
     }, POSITION_CHANGE_DURATION_MS);
-    positionChangeTimers.set(team, timerId);
+    state.positionChangeTimers.set(team, timerId);
   }
 
   const changeIndicator = changeText
@@ -325,71 +329,65 @@ function createTeamRow(rowData, index) {
     : "";
 
   row.innerHTML = `
-    <div class="rank">${currentPosition}.</div>
-    <div class="team-cell">
+    <td class="rank">${currentPosition}.</td>
+    <td class="team-cell">
       ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
       <span class="team-name">${escapeHTML(team)}</span>
       ${netRank != null ? `<span class="net-rank">NET ${netRank}</span>` : ""}
       ${changeIndicator}
-    </div>
-    <div class="conf">${escapeHTML(conf)}</div>
-    <div class="ovr">${escapeHTML(ovr)}</div>
+    </td>
+    <td class="conf">${escapeHTML(conf)}</td>
+    <td class="ovr">${escapeHTML(ovr)}</td>
   `;
 
   return row;
 }
 
-function ensureTableHeader(tableEl) {
-  if (headerInserted) return;
-  const header = document.createElement("div");
-  header.className = "row table-header";
-  header.setAttribute("aria-hidden", "true");
+function ensureTableHeader() {
+  if (state.headerInserted) return;
+  const header = document.createElement("tr");
+  header.className = "table-header";
   header.innerHTML = `
-    <div class="rank"></div>
-    <div class="team-cell header-label">TEAM</div>
-    <div class="conf header-label">CONF</div>
-    <div class="ovr header-label">OVR</div>
+    <th class="rank"></th>
+    <th class="team-cell header-label">TEAM</th>
+    <th class="conf header-label">CONF</th>
+    <th class="ovr header-label">OVR</th>
   `;
-  tableEl.prepend(header);
-  headerInserted = true;
+  dom.tableHead.appendChild(header);
+  state.headerInserted = true;
 }
 
 function updateTable(newTeamRows) {
-  const tableEl = document.getElementById("table");
-  if (!tableEl) return;
-  ensureTableHeader(tableEl);
-  const existingRows = Array.from(tableEl.querySelectorAll('.row:not(.table-header)'));
+  if (!dom.tableBody) return;
+  ensureTableHeader();
+  const existingRows = Array.from(dom.tableBody.querySelectorAll('.row:not(.table-header)'));
 
   newTeamRows.forEach((rowData, index) => {
     const existingRow = existingRows[index];
 
     if (!existingRow) {
-      // New row - append
       const newRow = createTeamRow(rowData, index);
-      if (firstRender) {
+      if (state.firstRender) {
         newRow.classList.add("row-enter");
         newRow.style.setProperty("--row-index", index);
       }
-      tableEl.appendChild(newRow);
+      dom.tableBody.appendChild(newRow);
     } else if (needsUpdate(existingRow, rowData, index)) {
-      // Replace row if data changed
       const newRow = createTeamRow(rowData, index);
-      tableEl.replaceChild(newRow, existingRow);
+      dom.tableBody.replaceChild(newRow, existingRow);
     }
-    // else: no change, keep existing DOM
   });
 
   // Remove excess rows if teams were removed
-  const allRows = tableEl.querySelectorAll('.row:not(.table-header)');
+  const allRows = dom.tableBody.querySelectorAll('.row:not(.table-header)');
   for (let i = newTeamRows.length; i < allRows.length; i++) {
     allRows[i].remove();
   }
 
-  firstRender = false;
+  state.firstRender = false;
 }
 
 function needsUpdate(row, newData, newIndex) {
-  // Check if any displayed values changed
   const confCell = row.querySelector('.conf');
   const ovrCell = row.querySelector('.ovr');
   const rankCell = row.querySelector('.rank');
@@ -422,21 +420,21 @@ async function loadStandings() {
   try {
     let teamRows;
     let loadedFromWorker = false;
-    const canAttemptWorker = USE_WORKER && Date.now() >= workerFallbackUntil;
+    const canAttemptWorker = USE_WORKER && Date.now() >= state.workerFallbackUntil;
 
     if (canAttemptWorker) {
       try {
         teamRows = await loadFromWorker();
         loadedFromWorker = true;
-        consecutiveWorkerFailures = 0;
+        state.consecutiveWorkerFailures = 0;
       } catch (workerErr) {
-        consecutiveWorkerFailures += 1;
+        state.consecutiveWorkerFailures += 1;
         if (DEBUG) console.error("Worker failed, attempting CSV fallback:", workerErr);
 
-        if (consecutiveWorkerFailures >= MAX_WORKER_FAILURES_BEFORE_FALLBACK) {
-          workerFallbackUntil = Date.now() + WORKER_RECOVERY_COOLDOWN_MS;
+        if (state.consecutiveWorkerFailures >= MAX_WORKER_FAILURES_BEFORE_FALLBACK) {
+          state.workerFallbackUntil = Date.now() + WORKER_RECOVERY_COOLDOWN_MS;
           if (DEBUG) console.warn(
-            `Worker fallback cooldown enabled until ${new Date(workerFallbackUntil).toLocaleTimeString()}`
+            `Worker fallback cooldown enabled until ${new Date(state.workerFallbackUntil).toLocaleTimeString()}`
           );
         }
 
@@ -445,28 +443,24 @@ async function loadStandings() {
     } else {
       teamRows = await loadFromCSV();
 
-      if (DEBUG && USE_WORKER && workerFallbackUntil && Date.now() < workerFallbackUntil) {
-        const minutesRemaining = Math.ceil((workerFallbackUntil - Date.now()) / 60000);
+      if (DEBUG && USE_WORKER && state.workerFallbackUntil && Date.now() < state.workerFallbackUntil) {
+        const minutesRemaining = Math.ceil((state.workerFallbackUntil - Date.now()) / 60000);
         console.log(`Using CSV while worker cools down (${minutesRemaining} min remaining)`);
       }
     }
 
-    // ===== COMMON: SORT AND RENDER =====
     teamRows.sort(compareTeams);
 
-    // ---- Render ----
     clearSkeleton();
     updateTable(teamRows);
 
-    // Update standings tracking for next comparison
-    previousStandings.clear();
+    state.previousStandings.clear();
     teamRows.forEach((rowData, index) => {
-      previousStandings.set(rowData.team, index + 1);
+      state.previousStandings.set(rowData.team, index + 1);
     });
 
-    // Update timestamp and reset retry count on success
-    lastSuccessfulUpdate = Date.now();
-    retryCount = 0;
+    state.lastSuccessfulUpdate = Date.now();
+    state.retryCount = 0;
     updateTimestamp();
     updateStatusIndicator(loadedFromWorker ? "connected" : "csv");
     setLoadingState(false);
@@ -476,16 +470,14 @@ async function loadStandings() {
     setLoadingState(false);
     updateStatusIndicator("failed");
 
-    // Implement exponential backoff retry (with cap)
-    retryCount++;
-    if (retryCount <= MAX_RETRY_ATTEMPTS) {
+    state.retryCount++;
+    if (state.retryCount <= MAX_RETRY_ATTEMPTS) {
       const retryDelay = calculateRetryDelay();
-      if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${retryCount})`);
+      if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${state.retryCount})`);
       setTimeout(() => loadStandings(), retryDelay);
     }
 
-    // Only show error if we don't have previous data
-    if (!lastSuccessfulUpdate) {
+    if (!state.lastSuccessfulUpdate) {
       showError("Error loading data - retrying...");
     }
   }
@@ -595,11 +587,11 @@ async function loadFromCSV() {
 }
 
 function scheduleNextRefresh() {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer);
+  if (state.refreshTimer) {
+    clearTimeout(state.refreshTimer);
   }
 
-  refreshTimer = setTimeout(() => {
+  state.refreshTimer = setTimeout(() => {
     loadStandings();
     scheduleNextRefresh();
   }, REFRESH_INTERVAL_MS);
@@ -609,37 +601,29 @@ function scheduleNextRefresh() {
 // INIT + AUTO REFRESH
 // =====================
 
-// Manual refresh button
-const refreshBtn = document.getElementById("refresh-btn");
-if (refreshBtn) {
-  refreshBtn.addEventListener("click", () => {
-    if (!isLoading) {
+if (dom.refreshBtn) {
+  dom.refreshBtn.addEventListener("click", () => {
+    if (!state.isLoading) {
       loadStandings();
-      scheduleNextRefresh(); // Reset the auto-refresh timer
+      scheduleNextRefresh();
     }
   });
 }
 
-// Request wake lock to keep screen on
 requestWakeLock();
 
-// Re-acquire wake lock when visibility changes
 document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible" && wakeLock === null) {
+  if (document.visibilityState === "visible" && state.wakeLock === null) {
     await requestWakeLock();
   }
 });
 
-// Monitor online/offline status (debounced to avoid rapid-fire fetches)
-let onlineDebounceTimer = null;
 window.addEventListener("online", () => {
-  clearTimeout(onlineDebounceTimer);
-  onlineDebounceTimer = setTimeout(() => loadStandings(), 300);
+  clearTimeout(state.onlineDebounceTimer);
+  state.onlineDebounceTimer = setTimeout(() => loadStandings(), 300);
 });
 
-// Update timestamp display every minute
 setInterval(updateTimestamp, 60 * 1000);
 
-// Initial load and scheduled refreshes
 loadStandings();
 scheduleNextRefresh();
