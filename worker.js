@@ -19,7 +19,7 @@ export default {
     try {
       // Fetch both sources in parallel
       const [warrenNolanResponse, apPollResponse] = await Promise.all([
-        fetch('https://www.warrennolan.com/basketball/2026/conference/Big-Ten', {
+        fetch(`https://www.warrennolan.com/basketball/${new Date().getFullYear()}/conference/Big-Ten`, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; BigTenStandings/1.0)',
           },
@@ -37,6 +37,9 @@ export default {
 
       // Parse both HTMLs
       const warrenNolanHTML = await warrenNolanResponse.text();
+      if (!apPollResponse.ok) {
+        console.error(`AP Poll returned ${apPollResponse.status}`);
+      }
       const apPollHTML = apPollResponse.ok ? await apPollResponse.text() : '';
 
       // Get standings from WarrenNolan

@@ -19,10 +19,14 @@ const MAX_RETRY_DELAY_MS = 5 * 60 * 1000; // 5 minutes max backoff
 const POSITION_CHANGE_DURATION_MS = 5000; // Highlight changes for 5 seconds
 const MAX_WORKER_FAILURES_BEFORE_FALLBACK = 2;
 const WORKER_RECOVERY_COOLDOWN_MS = 30 * 60 * 1000; // Retry worker after 30 min
+const FETCH_TIMEOUT_MS = 10 * 1000; // 10 second fetch timeout
+const MAX_RETRY_ATTEMPTS = 6; // Stop retrying after 6 attempts (~30 min total)
+const DEBUG = false; // Set to true to enable debug logging
 
 // =====================
 // STATE
 // =====================
+const positionChangeTimers = new Map(); // team -> timeout ID
 let wakeLock = null;
 let lastSuccessfulUpdate = null;
 let previousStandings = new Map(); // team -> position
@@ -253,10 +257,10 @@ async function requestWakeLock() {
   if ("wakeLock" in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request("screen");
-      console.log("Wake lock acquired");
+      if (DEBUG) console.log("Wake lock acquired");
 
       wakeLock.addEventListener("release", () => {
-        console.log("Wake lock released");
+        if (DEBUG) console.log("Wake lock released");
       });
     } catch (err) {
       console.error("Wake lock error:", err);
@@ -268,6 +272,12 @@ function calculateRetryDelay() {
   const baseDelay = 1000; // 1 second
   const delay = Math.min(baseDelay * Math.pow(2, retryCount), MAX_RETRY_DELAY_MS);
   return delay;
+}
+
+function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timeoutId));
 }
 
 function createTeamRow(rowData, index) {
@@ -294,12 +304,18 @@ function createTeamRow(rowData, index) {
       changeText = `↓${Math.abs(positionChange)}`;
     }
 
+    // Clear any existing animation timer for this team
+    const existingTimer = positionChangeTimers.get(team);
+    if (existingTimer) clearTimeout(existingTimer);
+
     // Remove highlight after duration
-    setTimeout(() => {
+    const timerId = setTimeout(() => {
       row.classList.remove("position-changed", "moved-up", "moved-down");
       const indicator = row.querySelector(".position-change-indicator");
       if (indicator) indicator.remove();
+      positionChangeTimers.delete(team);
     }, POSITION_CHANGE_DURATION_MS);
+    positionChangeTimers.set(team, timerId);
   }
 
   const changeIndicator = changeText
@@ -418,11 +434,11 @@ async function loadStandings() {
         consecutiveWorkerFailures = 0;
       } catch (workerErr) {
         consecutiveWorkerFailures += 1;
-        console.error("Worker failed, attempting CSV fallback:", workerErr);
+        if (DEBUG) console.error("Worker failed, attempting CSV fallback:", workerErr);
 
         if (consecutiveWorkerFailures >= MAX_WORKER_FAILURES_BEFORE_FALLBACK) {
           workerFallbackUntil = Date.now() + WORKER_RECOVERY_COOLDOWN_MS;
-          console.warn(
+          if (DEBUG) console.warn(
             `Worker fallback cooldown enabled until ${new Date(workerFallbackUntil).toLocaleTimeString()}`
           );
         }
@@ -432,7 +448,7 @@ async function loadStandings() {
     } else {
       teamRows = await loadFromCSV();
 
-      if (USE_WORKER && workerFallbackUntil && Date.now() < workerFallbackUntil) {
+      if (DEBUG && USE_WORKER && workerFallbackUntil && Date.now() < workerFallbackUntil) {
         const minutesRemaining = Math.ceil((workerFallbackUntil - Date.now()) / 60000);
         console.log(`Using CSV while worker cools down (${minutesRemaining} min remaining)`);
       }
@@ -463,14 +479,13 @@ async function loadStandings() {
     setLoadingState(false);
     updateStatusIndicator("failed");
 
-    // Implement exponential backoff retry
+    // Implement exponential backoff retry (with cap)
     retryCount++;
-    const retryDelay = calculateRetryDelay();
-    console.log(`Retrying in ${retryDelay}ms (attempt ${retryCount})`);
-
-    setTimeout(() => {
-      loadStandings();
-    }, retryDelay);
+    if (retryCount <= MAX_RETRY_ATTEMPTS) {
+      const retryDelay = calculateRetryDelay();
+      if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${retryCount})`);
+      setTimeout(() => loadStandings(), retryDelay);
+    }
 
     // Only show error if we don't have previous data
     if (!lastSuccessfulUpdate) {
@@ -480,8 +495,8 @@ async function loadStandings() {
 }
 
 async function loadFromWorker() {
-  console.log("Fetching from Cloudflare Worker...");
-  const res = await fetch(`${WORKER_URL}?t=${Date.now()}`, { cache: "no-store" });
+  if (DEBUG) console.log("Fetching from Cloudflare Worker...");
+  const res = await fetchWithTimeout(`${WORKER_URL}?t=${Date.now()}`, { cache: "no-store" });
 
   if (!res.ok) {
     throw new Error(`Worker error: ${res.status}`);
@@ -500,16 +515,21 @@ async function loadFromWorker() {
     isWisconsin: team.team === "WISCONSIN",
   }));
 
-  console.log(`✓ Loaded ${teamRows.length} teams from Worker`);
+  if (DEBUG) console.log(`✓ Loaded ${teamRows.length} teams from Worker`);
   return teamRows;
 }
 
 async function loadFromCSV() {
-  console.log("Fetching from Google Sheets CSV...");
-  const res = await fetch(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
+  if (DEBUG) console.log("Fetching from Google Sheets CSV...");
+  const res = await fetchWithTimeout(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
 
   if (!res.ok) {
     throw new Error(`CSV error: ${res.status}`);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("text/") && !contentType.includes("csv")) {
+    throw new Error(`Unexpected CSV content-type: ${contentType}`);
   }
 
   const text = await res.text();
@@ -574,7 +594,7 @@ async function loadFromCSV() {
     })
     .filter(Boolean);
 
-  console.log(`✓ Loaded ${teamRows.length} teams from CSV`);
+  if (DEBUG) console.log(`✓ Loaded ${teamRows.length} teams from CSV`);
   return teamRows;
 }
 
