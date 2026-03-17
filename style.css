@@ -213,6 +213,26 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* ========== OFFSEASON BANNER ========== */
+.offseason-banner {
+  text-align: center;
+  padding: 1vh 0 0.5vh;
+}
+
+.offseason-title {
+  font-family: var(--font-heavy);
+  font-size: var(--size-row);
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+.offseason-note {
+  font-family: var(--font-gotham-medium);
+  font-size: 1.4vh;
+  opacity: 0.55;
+  margin-top: 0.3vh;
+}
+
 /* ========== MAIN TABLE AREA ========== */
 .main {
   flex: 1;

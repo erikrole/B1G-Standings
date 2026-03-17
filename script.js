@@ -35,6 +35,7 @@ const state = {
   firstRender: true,
   isLoading: false,
   onlineDebounceTimer: null,
+  offseason: false,
 };
 
 // =====================
@@ -103,6 +104,24 @@ function parseRecord(str) {
 function calculateWinPercentage(wins, losses) {
   const total = wins + losses;
   return total === 0 ? 0 : wins / total;
+}
+
+function isOffseason() {
+  const now = new Date();
+  const month = now.getMonth(); // 0-indexed
+  const day = now.getDate();
+  // In-season: Nov 4 (month 10) through Apr 10 (month 3)
+  if (month >= 4 && month <= 9) return true;   // May–October
+  if (month === 3 && day > 10) return true;     // After April 10
+  if (month === 10 && day < 4) return true;     // Before November 4
+  return false;
+}
+
+function getSeasonLabel() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const endYear = now.getMonth() >= 10 ? year + 1 : year;
+  return `${endYear - 1}-${String(endYear).slice(2)}`;
 }
 
 function compareTeams(a, b) {
@@ -213,6 +232,28 @@ function updateStatusIndicator(status) {
   } else if (status === "failed") {
     dom.statusIndicator.classList.add("failed");
     dom.statusLabel.textContent = "Failed";
+  } else if (status === "offseason") {
+    dom.statusIndicator.classList.add("csv");
+    dom.statusLabel.textContent = "Final";
+  }
+}
+
+function showOffseasonBanner() {
+  const banner = document.getElementById("offseason-banner");
+  const title = document.getElementById("offseason-title");
+  const note = document.getElementById("offseason-note");
+  if (!banner || !title || !note) return;
+
+  const label = getSeasonLabel();
+  title.textContent = `${label} FINAL STANDINGS`;
+
+  const now = new Date();
+  const nextNovYear = now.getMonth() >= 10 ? now.getFullYear() + 1 : now.getFullYear();
+  note.textContent = `Next season begins November ${nextNovYear}`;
+  banner.style.display = "block";
+
+  if (dom.timestamp) {
+    dom.timestamp.textContent = "";
   }
 }
 
@@ -420,32 +461,37 @@ async function loadStandings() {
   try {
     let teamRows;
     let loadedFromWorker = false;
-    const canAttemptWorker = USE_WORKER && Date.now() >= state.workerFallbackUntil;
 
-    if (canAttemptWorker) {
-      try {
-        teamRows = await loadFromWorker();
-        loadedFromWorker = true;
-        state.consecutiveWorkerFailures = 0;
-      } catch (workerErr) {
-        state.consecutiveWorkerFailures += 1;
-        if (DEBUG) console.error("Worker failed, attempting CSV fallback:", workerErr);
-
-        if (state.consecutiveWorkerFailures >= MAX_WORKER_FAILURES_BEFORE_FALLBACK) {
-          state.workerFallbackUntil = Date.now() + WORKER_RECOVERY_COOLDOWN_MS;
-          if (DEBUG) console.warn(
-            `Worker fallback cooldown enabled until ${new Date(state.workerFallbackUntil).toLocaleTimeString()}`
-          );
-        }
-
-        teamRows = await loadFromCSV();
-      }
-    } else {
+    if (state.offseason) {
       teamRows = await loadFromCSV();
+    } else {
+      const canAttemptWorker = USE_WORKER && Date.now() >= state.workerFallbackUntil;
 
-      if (DEBUG && USE_WORKER && state.workerFallbackUntil && Date.now() < state.workerFallbackUntil) {
-        const minutesRemaining = Math.ceil((state.workerFallbackUntil - Date.now()) / 60000);
-        console.log(`Using CSV while worker cools down (${minutesRemaining} min remaining)`);
+      if (canAttemptWorker) {
+        try {
+          teamRows = await loadFromWorker();
+          loadedFromWorker = true;
+          state.consecutiveWorkerFailures = 0;
+        } catch (workerErr) {
+          state.consecutiveWorkerFailures += 1;
+          if (DEBUG) console.error("Worker failed, attempting CSV fallback:", workerErr);
+
+          if (state.consecutiveWorkerFailures >= MAX_WORKER_FAILURES_BEFORE_FALLBACK) {
+            state.workerFallbackUntil = Date.now() + WORKER_RECOVERY_COOLDOWN_MS;
+            if (DEBUG) console.warn(
+              `Worker fallback cooldown enabled until ${new Date(state.workerFallbackUntil).toLocaleTimeString()}`
+            );
+          }
+
+          teamRows = await loadFromCSV();
+        }
+      } else {
+        teamRows = await loadFromCSV();
+
+        if (DEBUG && USE_WORKER && state.workerFallbackUntil && Date.now() < state.workerFallbackUntil) {
+          const minutesRemaining = Math.ceil((state.workerFallbackUntil - Date.now()) / 60000);
+          console.log(`Using CSV while worker cools down (${minutesRemaining} min remaining)`);
+        }
       }
     }
 
@@ -461,8 +507,14 @@ async function loadStandings() {
 
     state.lastSuccessfulUpdate = Date.now();
     state.retryCount = 0;
-    updateTimestamp();
-    updateStatusIndicator(loadedFromWorker ? "connected" : "csv");
+
+    if (state.offseason) {
+      showOffseasonBanner();
+      updateStatusIndicator("offseason");
+    } else {
+      updateTimestamp();
+      updateStatusIndicator(loadedFromWorker ? "connected" : "csv");
+    }
     setLoadingState(false);
   } catch (err) {
     console.error("Error loading data:", err);
@@ -470,15 +522,17 @@ async function loadStandings() {
     setLoadingState(false);
     updateStatusIndicator("failed");
 
-    state.retryCount++;
-    if (state.retryCount <= MAX_RETRY_ATTEMPTS) {
-      const retryDelay = calculateRetryDelay();
-      if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${state.retryCount})`);
-      setTimeout(() => loadStandings(), retryDelay);
+    if (!state.offseason) {
+      state.retryCount++;
+      if (state.retryCount <= MAX_RETRY_ATTEMPTS) {
+        const retryDelay = calculateRetryDelay();
+        if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${state.retryCount})`);
+        setTimeout(() => loadStandings(), retryDelay);
+      }
     }
 
     if (!state.lastSuccessfulUpdate) {
-      showError("Error loading data - retrying...");
+      showError(state.offseason ? "Standings unavailable" : "Error loading data - retrying...");
     }
   }
 }
@@ -600,12 +654,13 @@ function scheduleNextRefresh() {
 // =====================
 // INIT + AUTO REFRESH
 // =====================
+state.offseason = isOffseason();
 
 if (dom.refreshBtn) {
   dom.refreshBtn.addEventListener("click", () => {
     if (!state.isLoading) {
       loadStandings();
-      scheduleNextRefresh();
+      if (!state.offseason) scheduleNextRefresh();
     }
   });
 }
@@ -619,11 +674,16 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 window.addEventListener("online", () => {
+  if (state.offseason) return;
   clearTimeout(state.onlineDebounceTimer);
   state.onlineDebounceTimer = setTimeout(() => loadStandings(), 300);
 });
 
-setInterval(updateTimestamp, 60 * 1000);
+if (!state.offseason) {
+  setInterval(updateTimestamp, 60 * 1000);
+}
 
 loadStandings();
-scheduleNextRefresh();
+if (!state.offseason) {
+  scheduleNextRefresh();
+}
