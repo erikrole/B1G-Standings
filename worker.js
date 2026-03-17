@@ -3,6 +3,8 @@
  * Fetches data from WarrenNolan (standings + NET) and NCAA (AP Poll)
  */
 
+const NO_RANK_VALUE = 999;
+
 export default {
   async fetch(request) {
     // Handle CORS preflight
@@ -173,7 +175,7 @@ function parseWarrenNolanTable(html) {
         team: teamName.toUpperCase(),
         conf: confRecord,
         ovr: ovrRecord,
-        apRank: 999, // Will be filled in from NCAA data
+        apRank: NO_RANK_VALUE, // Will be filled in from NCAA data
         netRank,
         wins: overallWins,
         losses: overallLosses,

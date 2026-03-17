@@ -11,7 +11,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <link rel="stylesheet" href="style.css?v=20260317a" />
+    <link rel="stylesheet" href="style.css?v=20260317c" />
   </head>
   <body>
     <picture class="bg-image">
@@ -32,8 +32,16 @@
         </div>
       </header>
 
+      <div id="offseason-banner" class="offseason-banner" style="display: none;">
+        <div class="offseason-title" id="offseason-title"></div>
+        <div class="offseason-note" id="offseason-note"></div>
+      </div>
+
       <main class="main">
-        <div id="table" class="standings-table" role="table" aria-label="Big Ten basketball standings"></div>
+        <table id="table" class="standings-table" aria-label="Big Ten basketball standings">
+          <thead id="table-head"></thead>
+          <tbody id="table-body"></tbody>
+        </table>
       </main>
 
       <footer class="footer">
@@ -49,6 +57,6 @@
       </footer>
     </div>
 
-    <script src="script.js?v=20260317a"></script>
+    <script src="script.js?v=20260317c"></script>
   </body>
 </html>

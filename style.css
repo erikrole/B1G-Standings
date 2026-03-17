@@ -22,7 +22,7 @@
   --size-footer: 1.4vh;
   --size-wisconsin-team: 3.3vh;
 
-  --spacing-column-gap: 2vw;
+  --spacing-cell-padding: 0 1vw;
 }
 
 /* ========== FONT FACES ========== */
@@ -213,6 +213,26 @@ body {
   to { transform: rotate(360deg); }
 }
 
+/* ========== OFFSEASON BANNER ========== */
+.offseason-banner {
+  text-align: center;
+  padding: 1vh 0 0.5vh;
+}
+
+.offseason-title {
+  font-family: var(--font-heavy);
+  font-size: var(--size-row);
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
+.offseason-note {
+  font-family: var(--font-gotham-medium);
+  font-size: 1.4vh;
+  opacity: 0.55;
+  margin-top: 0.3vh;
+}
+
 /* ========== MAIN TABLE AREA ========== */
 .main {
   flex: 1;
@@ -222,16 +242,31 @@ body {
 }
 
 .standings-table {
-  margin-top: 0;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Column widths */
+.standings-table .rank {
+  width: 6ch;
+}
+
+.standings-table .conf {
+  width: 10ch;
+}
+
+.standings-table .ovr {
+  width: 10ch;
 }
 
 /* Row layout: rank | team(+ap) | conf | ovr */
+.row td,
+.row th {
+  padding: 0.3vh 1vw;
+  vertical-align: middle;
+}
+
 .row {
-  display: grid;
-  grid-template-columns: minmax(3ch, 6ch) 1fr minmax(7ch, 10ch) minmax(7ch, 10ch);
-  column-gap: var(--spacing-column-gap);
-  align-items: center;
-  padding: 0.3vh 0;
   border-bottom: 1px solid var(--color-border);
   font-size: var(--size-row);
   transition: background-color 0.5s ease, transform 0.3s ease;
@@ -267,19 +302,21 @@ body {
 }
 
 /* Table header row */
-.row.table-header {
+.table-header {
   border-bottom: 2px solid var(--color-border);
-  padding-bottom: 0.5vh;
-  margin-bottom: 0.2vh;
 }
 
-.row.table-header .header-label {
+.table-header th {
+  padding-bottom: 0.5vh;
+}
+
+.table-header .header-label {
   font-family: var(--font-gotham-medium);
   font-size: 1.4vh;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   opacity: 0.6;
-  padding-left: 0;
+  font-weight: normal;
 }
 
 .rank {
@@ -294,14 +331,14 @@ body {
 /* Team cell = AP rank + team name */
 .team-cell {
   position: relative;
-  padding-left: 2.5ch; /* more space for AP rank */
-  display: block;
+  padding-left: 2.5ch !important;
 }
 
 .ap-rank {
   position: absolute;
   left: 0;
-  top: 0;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 0.7em;
   opacity: 0.9;
   font-weight: bold;
@@ -376,6 +413,9 @@ body {
 
 .row.wisconsin {
   background: var(--color-highlight-bg);
+}
+
+.row.wisconsin td {
   padding-top: 0.5vh;
   padding-bottom: 0.5vh;
 }
@@ -422,14 +462,14 @@ body {
 }
 
 /* Loading skeleton */
-.skeleton-row {
-  display: grid;
-  grid-template-columns: minmax(3ch, 6ch) 1fr minmax(7ch, 10ch) minmax(7ch, 10ch);
-  column-gap: var(--spacing-column-gap);
-  align-items: center;
-  padding: 0.3vh 0;
-  border-bottom: 1px solid var(--color-border);
+.skeleton-row td {
+  padding: 0.3vh 1vw;
   height: var(--size-row);
+}
+
+.skeleton-row {
+  border-bottom: 1px solid var(--color-border);
+  transition: opacity 0.2s ease;
 }
 
 .skeleton-bar {
@@ -459,11 +499,6 @@ body {
   font-size: var(--size-row);
   opacity: 0.7;
   text-align: center;
-}
-
-/* ========== SKELETON TRANSITION ========== */
-.skeleton-row {
-  transition: opacity 0.2s ease;
 }
 
 /* ========== REFRESH BUTTON ========== */
@@ -505,7 +540,6 @@ body {
     --size-header: 10vh;
     --size-team: 4.2vh;
     --size-wisconsin-team: 2.8vh;
-    --spacing-column-gap: 1.5vw;
   }
 }
 
