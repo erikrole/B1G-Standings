@@ -21,3 +21,14 @@
 - [x] Add responsive breakpoints: 480px (small phone), 768px (tablet)
 - [x] Add row hover effect for desktop (using `hover: hover` media query)
 - [x] Increase alternating row contrast (0.03 -> 0.05)
+
+## Quick Wins (March 17, 2026)
+- [x] Fix hardcoded year `2026` in `worker.js` → dynamic `new Date().getFullYear()`
+- [x] Update cache-bust version strings in `index.html` → `v=20260317a`
+- [x] Add background image alt text (`"Basketball court"`)
+- [x] Add `.ok` check + error log for AP Poll fetch in `worker.js`
+- [x] Add `DEBUG` flag and gate 10+ debug console.logs behind it
+- [x] Add 10-second fetch timeout via `AbortController` wrapper
+- [x] Add `MAX_RETRY_ATTEMPTS` cap (6 attempts) to prevent infinite retries
+- [x] Add Content-Type validation on CSV fetch response
+- [x] Fix position change animation overlap with timer cleanup map
