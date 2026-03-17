@@ -2,13 +2,9 @@
 // CONFIG
 // =====================
 
-// Data source: set USE_WORKER to true after deploying Cloudflare Worker
-const USE_WORKER = true; // Change to true after worker deployment
-
-// Cloudflare Worker URL (update this after deploying worker)
+// Data source: Cloudflare Worker (primary), Google Sheets CSV (fallback)
+const USE_WORKER = true;
 const WORKER_URL = "https://big-ten-standings.erikrole.workers.dev";
-
-// Fallback: Google Sheets CSV
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/1bOdPDPKf1QHUyayNgDToaCtu3k6_-bccnWLNqpyayvQ/export?format=csv&gid=1204601349";
 
