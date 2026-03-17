@@ -25,24 +25,6 @@
 
 ---
 
-## Current Branch Status
-
-### Active Branches:
-- ✅ **`main`** - Production branch (current live code)
-- ✅ **`beta`** - Staging branch (created locally, needs to be pushed manually)
-- ✅ **`claude/feature-performance-optimizations-HHfIz`** - Current performance work
-  - Phase 1: WOFF2 fonts & WebP images (640KB reduction)
-  - Phase 2: Smart DOM diffing (90% fewer operations)
-  - Ready to merge to beta for testing
-
-### Branches to Clean Up:
-- ⚠️ **`claude/visual-rankings-updates-HHfIz`** - Old name, delete from GitHub
-- ⚠️ **`claude/espn-api-implementation-HHfIz`** - Review and rename or merge
-- ℹ️ **`backup/google-sheets-version`** - Keep as backup reference
-- ⚠️ **`erikrole-patch-1`** - Review and delete if merged
-
----
-
 ## Recommended Workflow
 
 ### For New Features:
@@ -126,33 +108,6 @@ git push -u origin hotfix/critical-issue-description
 
 ---
 
-## Manual Cleanup Steps
-
-Since the Claude Code environment has branch restrictions, you'll need to manually clean up old branches on GitHub:
-
-### 1. Delete Old Remote Branches:
-Go to GitHub: https://github.com/erikrole/B1G-Standings/branches
-
-Delete these branches (after confirming they're merged or no longer needed):
-- `claude/visual-rankings-updates-HHfIz` (renamed to feature-performance-optimizations)
-- `erikrole-patch-1` (if merged)
-- Any other old feature branches
-
-### 2. Push Beta Branch:
-```bash
-# From your local machine (not Claude Code):
-git checkout beta
-git push -u origin beta
-```
-
-### 3. Rename Other Feature Branches:
-For `claude/espn-api-implementation-HHfIz`, either:
-- Merge it to main if it's ready
-- Rename to `feature/espn-api-implementation`
-- Or delete if it's no longer needed
-
----
-
 ## Commit Message Conventions
 
 Use clear, descriptive commit messages:
@@ -177,23 +132,6 @@ perf: Reduce DOM operations with smart diffing
 refactor: Extract CSV parsing to separate module
 docs: Update README with deployment instructions
 ```
-
----
-
-## Current Work: Performance Optimizations
-
-**Branch**: `claude/feature-performance-optimizations-HHfIz`
-
-**Changes:**
-- ✅ Phase 1: Font & image optimizations (640KB reduction)
-- ✅ Phase 2: Smart DOM diffing (90% fewer operations)
-- ⏳ Phase 3: Offline caching (planned)
-
-**Next Steps:**
-1. Test the performance improvements
-2. Create PR to `beta` for staging review
-3. After testing in beta, create PR to `main` for production
-4. After merging, delete the feature branch
 
 ---
 

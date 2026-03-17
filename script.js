@@ -135,6 +135,12 @@ function compareTeams(a, b) {
   return a.team.localeCompare(b.team);
 }
 
+// =====================
+// DOM DIFFING HELPERS
+// =====================
+let headerInserted = false;
+let firstRender = true;
+
 function showError(message) {
   const tableEl = document.getElementById("table");
   if (tableEl) {
@@ -337,11 +343,6 @@ function createTeamRow(rowData, index) {
   return row;
 }
 
-// =====================
-// DOM DIFFING HELPERS
-// =====================
-let headerInserted = false;
-let firstRender = true;
 function ensureTableHeader(tableEl) {
   if (headerInserted) return;
   const header = document.createElement("div");
@@ -558,7 +559,7 @@ async function loadFromCSV() {
   }
 
   const teamRows = rows
-    .map((cols, originalIndex) => {
+    .map((cols) => {
       if (!cols.length) return null;
 
       const teamRaw = (cols[TEAM_COL] || "").trim();
@@ -589,7 +590,6 @@ async function loadFromCSV() {
         confLosses,
         confPct,
         isWisconsin: team === "WISCONSIN",
-        originalIndex,
       };
     })
     .filter(Boolean);
