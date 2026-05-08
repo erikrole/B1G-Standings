@@ -1,7 +1,7 @@
 /* ========== CSS VARIABLES ========== */
 :root {
   --color-white: #ffffff;
-  --color-highlight-bg: rgba(36, 3, 3, 0.736);
+  --color-highlight-bg: rgba(36, 3, 3, 0.75);
   --color-border: rgba(255, 255, 255, 0.18);
   --color-online: #4caf50;
   --color-warning: #ff9800;
@@ -28,8 +28,7 @@
 /* ========== FONT FACES ========== */
 @font-face {
   font-family: "AeternusNano";
-  src: url("Aeternus/01-aeternus_nano.woff2") format("woff2"),
-       url("Aeternus/01-aeternus_nano.ttf") format("truetype");
+  src: url("Aeternus/01-aeternus_nano.woff2") format("woff2");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -37,8 +36,7 @@
 
 @font-face {
   font-family: "AeternusHeavy";
-  src: url("Aeternus/04-aeternus_heavy.woff2") format("woff2"),
-       url("Aeternus/04-aeternus_heavy.ttf") format("truetype");
+  src: url("Aeternus/04-aeternus_heavy.woff2") format("woff2");
   font-weight: 900;
   font-style: normal;
   font-display: swap;
@@ -46,8 +44,7 @@
 
 @font-face {
   font-family: "Wisconsin";
-  src: url("Aeternus/Wisconsin-Regular.woff2") format("woff2"),
-       url("Aeternus/Wisconsin-Regular.ttf") format("truetype");
+  src: url("Aeternus/Wisconsin-Regular.woff2") format("woff2");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -55,8 +52,7 @@
 
 @font-face {
   font-family: "GothamBold";
-  src: url("Aeternus/Gotham-Bold.woff2") format("woff2"),
-       url("Aeternus/Gotham-Bold.otf") format("opentype");
+  src: url("Aeternus/Gotham-Bold.woff2") format("woff2");
   font-weight: bold;
   font-style: normal;
   font-display: swap;
@@ -64,8 +60,7 @@
 
 @font-face {
   font-family: "GothamMedium";
-  src: url("Aeternus/Gotham-Medium.woff2") format("woff2"),
-       url("Aeternus/Gotham-Medium.otf") format("opentype");
+  src: url("Aeternus/Gotham-Medium.woff2") format("woff2");
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -260,8 +255,7 @@ body {
 }
 
 /* Row layout: rank | team(+ap) | conf | ovr */
-.row td,
-.row th {
+.row td {
   padding: 0.3vh 1vw;
   vertical-align: middle;
 }
@@ -278,7 +272,7 @@ body {
 
 /* Position change animations */
 .row.position-changed {
-  animation: highlight 5s ease-out;
+  animation: position-change-pulse 5s ease-out;
 }
 
 .row.moved-up {
@@ -289,16 +283,9 @@ body {
   background-color: var(--color-moved-down);
 }
 
-@keyframes highlight {
-  0% {
-    transform: scale(1.02);
-  }
-  10% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(1);
-  }
+@keyframes position-change-pulse {
+  0% { transform: scale(1.02); }
+  10%, 100% { transform: scale(1); }
 }
 
 /* Table header row */

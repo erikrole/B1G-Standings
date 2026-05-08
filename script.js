@@ -1,23 +1,43 @@
+import { NO_RANK_VALUE } from "./lib/constants.js";
+import { isOffseason, getSeasonLabel, getSeasonEndYear } from "./lib/season.js";
+import {
+  escapeHTML,
+  toDash,
+  parseRecord,
+  calculateWinPercentage,
+  parseCSV,
+} from "./lib/parsing.js";
+import { compareTeams } from "./lib/sorting.js";
+
 // =====================
 // CONFIG
 // =====================
-
-// Data source: Cloudflare Worker (primary), Google Sheets CSV (fallback)
 const USE_WORKER = true;
 const WORKER_URL = "https://big-ten-standings.erikrole.workers.dev";
 const CSV_URL =
   "https://docs.google.com/spreadsheets/d/1bOdPDPKf1QHUyayNgDToaCtu3k6_-bccnWLNqpyayvQ/export?format=csv&gid=1204601349";
 
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const NO_RANK_VALUE = 999;
-const STALE_DATA_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
-const MAX_RETRY_DELAY_MS = 5 * 60 * 1000; // 5 minutes max backoff
-const POSITION_CHANGE_DURATION_MS = 5000; // Highlight changes for 5 seconds
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const STALE_DATA_THRESHOLD_MS = 30 * 60 * 1000;
+const MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
+const POSITION_CHANGE_DURATION_MS = 5000;
 const MAX_WORKER_FAILURES_BEFORE_FALLBACK = 2;
-const WORKER_RECOVERY_COOLDOWN_MS = 30 * 60 * 1000; // Retry worker after 30 min
-const FETCH_TIMEOUT_MS = 10 * 1000; // 10 second fetch timeout
-const MAX_RETRY_ATTEMPTS = 6; // Stop retrying after 6 attempts (~30 min total)
-const DEBUG = false; // Set to true to enable debug logging
+const WORKER_RECOVERY_COOLDOWN_MS = 30 * 60 * 1000;
+const FETCH_TIMEOUT_MS = 10 * 1000;
+const MAX_RETRY_ATTEMPTS = 6;
+const TABLE_COLUMNS = 4;
+const SKELETON_ROW_COUNT = 18;
+
+// Debug logging is opt-in via `?debug=1` URL param or `localStorage.debug = '1'`.
+const DEBUG = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("debug") === "1") return true;
+    return window.localStorage?.getItem("debug") === "1";
+  } catch {
+    return false;
+  }
+})();
 
 // =====================
 // STATE
@@ -29,6 +49,7 @@ const state = {
   positionChangeTimers: new Map(),
   retryCount: 0,
   refreshTimer: null,
+  retryTimer: null,
   consecutiveWorkerFailures: 0,
   workerFallbackUntil: 0,
   headerInserted: false,
@@ -53,137 +74,21 @@ const dom = {
 };
 
 // =====================
-// CSV PARSING
-// =====================
-function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length === 0) return { headers: [], rows: [] };
-
-  const headers = lines[0].split(",").map(h => h.trim());
-  const rows = lines.slice(1).map(line => {
-    const cells = [];
-    let current = "";
-    let inQuotes = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === "," && !inQuotes) {
-        cells.push(current.trim());
-        current = "";
-      } else {
-        current += char;
-      }
-    }
-    cells.push(current.trim());
-    return cells;
-  });
-
-  return { headers, rows };
-}
-
-// =====================
-// UTILITIES
-// =====================
-const toDash = str => (str && str.trim()) || "";
-
-const _escapeMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-function escapeHTML(str) {
-  return String(str).replace(/[&<>"']/g, c => _escapeMap[c]);
-}
-
-function parseRecord(str) {
-  const clean = (str || "").replace(/[–—−]/g, "-");
-  const [wRaw, lRaw] = clean.split("-");
-  const wins = parseInt(wRaw, 10) || 0;
-  const losses = parseInt(lRaw, 10) || 0;
-  return { wins, losses };
-}
-
-function calculateWinPercentage(wins, losses) {
-  const total = wins + losses;
-  return total === 0 ? 0 : wins / total;
-}
-
-function isOffseason() {
-  const now = new Date();
-  const month = now.getMonth(); // 0-indexed
-  const day = now.getDate();
-  // In-season: Nov 4 (month 10) through Apr 10 (month 3)
-  if (month >= 4 && month <= 9) return true;   // May–October
-  if (month === 3 && day > 10) return true;     // After April 10
-  if (month === 10 && day < 4) return true;     // Before November 4
-  return false;
-}
-
-function getSeasonLabel() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const endYear = now.getMonth() >= 10 ? year + 1 : year;
-  return `${endYear - 1}-${String(endYear).slice(2)}`;
-}
-
-function compareTeams(a, b) {
-  // 1) Conference winning percentage (higher first)
-  if (b.confPct !== a.confPct) return b.confPct - a.confPct;
-
-  // 2) Conference wins (more wins first)
-  if (b.confWins !== a.confWins) return b.confWins - a.confWins;
-
-  // 3) Conference losses (fewer losses first, when wins are tied)
-  if (a.confLosses !== b.confLosses) return a.confLosses - b.confLosses;
-
-  // 4) Overall winning percentage (higher first)
-  if (b.pct !== a.pct) return b.pct - a.pct;
-
-  // 5) Overall total wins (more wins first)
-  if (b.wins !== a.wins) return b.wins - a.wins;
-
-  // 6) Wisconsin bump among identical records
-  if (a.isWisconsin && !b.isWisconsin) return -1;
-  if (b.isWisconsin && !a.isWisconsin) return 1;
-
-  // 7) AP ranking: ranked teams first, then lower number is better
-  const aRanked = a.apRank < NO_RANK_VALUE;
-  const bRanked = b.apRank < NO_RANK_VALUE;
-
-  if (aRanked && !bRanked) return -1;
-  if (bRanked && !aRanked) return 1;
-
-  if (aRanked && bRanked && a.apRank !== b.apRank) {
-    return a.apRank - b.apRank;
-  }
-
-  // 8) NET ranking: lower is better
-  const aHasNet = a.netRank != null;
-  const bHasNet = b.netRank != null;
-
-  if (aHasNet && !bHasNet) return -1;
-  if (bHasNet && !aHasNet) return 1;
-
-  if (aHasNet && bHasNet && a.netRank !== b.netRank) {
-    return a.netRank - b.netRank;
-  }
-
-  // 9) Alphabetical fallback (if all else is equal)
-  return a.team.localeCompare(b.team);
-}
-
-// =====================
 // DOM HELPERS
 // =====================
 function showError(message) {
   if (!dom.tableBody) return;
-  dom.tableBody.innerHTML = `<tr><td colspan="4" class="error-message" role="alert">${escapeHTML(message)}</td></tr>`;
+  dom.tableBody.innerHTML = `<tr><td colspan="${TABLE_COLUMNS}" class="error-message" role="alert">${escapeHTML(message)}</td></tr>`;
+  // The header lives in <thead>, not <tbody>. Clear it explicitly so the
+  // next successful render doesn't append a second header row.
+  if (dom.tableHead) dom.tableHead.innerHTML = "";
   state.headerInserted = false;
   state.firstRender = true;
 }
 
 function showSkeleton() {
   if (!dom.tableBody || dom.tableBody.querySelector(".row")) return;
-  const count = 18;
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < SKELETON_ROW_COUNT; i++) {
     const row = document.createElement("tr");
     row.className = "skeleton-row";
     row.innerHTML = `
@@ -203,7 +108,7 @@ function clearSkeleton() {
     el.style.opacity = "0";
     el.addEventListener("transitionend", () => el.remove(), { once: true });
   });
-  // Fallback removal in case transitionend doesn't fire
+  // transitionend can be skipped if the element is removed while hidden.
   setTimeout(() => skeletons.forEach(el => el.remove()), 300);
 }
 
@@ -227,8 +132,10 @@ function updateStatusIndicator(status) {
     dom.statusIndicator.classList.add("connected");
     dom.statusLabel.textContent = "Connected";
   } else if (status === "csv") {
+    // Class name kept for CSS compatibility; label says "Backup" so non-
+    // technical viewers understand the data is from a fallback source.
     dom.statusIndicator.classList.add("csv");
-    dom.statusLabel.textContent = "CSV";
+    dom.statusLabel.textContent = "Backup";
   } else if (status === "failed") {
     dom.statusIndicator.classList.add("failed");
     dom.statusLabel.textContent = "Failed";
@@ -244,17 +151,11 @@ function showOffseasonBanner() {
   const note = document.getElementById("offseason-note");
   if (!banner || !title || !note) return;
 
-  const label = getSeasonLabel();
-  title.textContent = `${label} FINAL STANDINGS`;
-
-  const now = new Date();
-  const nextNovYear = now.getMonth() >= 10 ? now.getFullYear() + 1 : now.getFullYear();
-  note.textContent = `Next season begins November ${nextNovYear}`;
+  title.textContent = `${getSeasonLabel()} FINAL STANDINGS`;
+  note.textContent = `Next season begins November ${getSeasonEndYear()}`;
   banner.style.display = "block";
 
-  if (dom.timestamp) {
-    dom.timestamp.textContent = "";
-  }
+  if (dom.timestamp) dom.timestamp.textContent = "";
 }
 
 function updateTimestamp() {
@@ -263,53 +164,50 @@ function updateTimestamp() {
   if (!state.lastSuccessfulUpdate) {
     dom.timestamp.textContent = "Waiting for data...";
     dom.timestamp.className = "timestamp";
+    dom.timestamp.removeAttribute("title");
     return;
   }
 
   const now = Date.now();
-  const timeSinceUpdate = now - state.lastSuccessfulUpdate;
-  const isStale = timeSinceUpdate > STALE_DATA_THRESHOLD_MS;
-
+  const isStale = now - state.lastSuccessfulUpdate > STALE_DATA_THRESHOLD_MS;
   const updateDate = new Date(state.lastSuccessfulUpdate);
-
   const nowDate = new Date(now);
   const isToday = updateDate.toDateString() === nowDate.toDateString();
   const isYesterday = new Date(now - 86400000).toDateString() === updateDate.toDateString();
 
-  const timeString = updateDate.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
+  const timeString = updateDate.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
   });
 
   let datePrefix;
-  if (isToday) {
-    datePrefix = "today";
-  } else if (isYesterday) {
-    datePrefix = "yesterday";
-  } else {
-    datePrefix = updateDate.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric'
-    });
-  }
+  if (isToday) datePrefix = "today";
+  else if (isYesterday) datePrefix = "yesterday";
+  else datePrefix = updateDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric" });
 
   dom.timestamp.textContent = `Last updated ${datePrefix} at ${timeString}`;
   dom.timestamp.className = isStale ? "timestamp stale" : "timestamp";
+  dom.timestamp.title = updateDate.toLocaleString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 async function requestWakeLock() {
-  if ("wakeLock" in navigator) {
-    try {
-      state.wakeLock = await navigator.wakeLock.request("screen");
-      if (DEBUG) console.log("Wake lock acquired");
-
-      state.wakeLock.addEventListener("release", () => {
-        if (DEBUG) console.log("Wake lock released");
-      });
-    } catch (err) {
-      console.error("Wake lock error:", err);
-    }
+  if (!("wakeLock" in navigator)) return;
+  try {
+    state.wakeLock = await navigator.wakeLock.request("screen");
+    if (DEBUG) console.log("Wake lock acquired");
+    state.wakeLock.addEventListener("release", () => {
+      if (DEBUG) console.log("Wake lock released");
+    });
+  } catch (err) {
+    console.error("Wake lock error:", err);
   }
 }
 
@@ -336,7 +234,6 @@ function createTeamRow(rowData, index) {
   if (isWisconsin) row.classList.add("wisconsin");
   row.dataset.team = team;
 
-  // Check if position changed
   let changeText = "";
   const previousPosition = state.previousStandings.get(team);
   if (previousPosition !== undefined && previousPosition !== currentPosition) {
@@ -351,11 +248,9 @@ function createTeamRow(rowData, index) {
       changeText = `↓${Math.abs(positionChange)}`;
     }
 
-    // Clear any existing animation timer for this team
     const existingTimer = state.positionChangeTimers.get(team);
     if (existingTimer) clearTimeout(existingTimer);
 
-    // Remove highlight after duration
     const timerId = setTimeout(() => {
       row.classList.remove("position-changed", "moved-up", "moved-down");
       const indicator = row.querySelector(".position-change-indicator");
@@ -401,7 +296,7 @@ function ensureTableHeader() {
 function updateTable(newTeamRows) {
   if (!dom.tableBody) return;
   ensureTableHeader();
-  const existingRows = Array.from(dom.tableBody.querySelectorAll('.row:not(.table-header)'));
+  const existingRows = Array.from(dom.tableBody.querySelectorAll(".row:not(.table-header)"));
 
   newTeamRows.forEach((rowData, index) => {
     const existingRow = existingRows[index];
@@ -419,8 +314,7 @@ function updateTable(newTeamRows) {
     }
   });
 
-  // Remove excess rows if teams were removed
-  const allRows = dom.tableBody.querySelectorAll('.row:not(.table-header)');
+  const allRows = dom.tableBody.querySelectorAll(".row:not(.table-header)");
   for (let i = newTeamRows.length; i < allRows.length; i++) {
     allRows[i].remove();
   }
@@ -429,17 +323,17 @@ function updateTable(newTeamRows) {
 }
 
 function needsUpdate(row, newData, newIndex) {
-  const confCell = row.querySelector('.conf');
-  const ovrCell = row.querySelector('.ovr');
-  const rankCell = row.querySelector('.rank');
-  const apRankSpan = row.querySelector('.ap-rank');
-  const netRankSpan = row.querySelector('.net-rank');
+  const confCell = row.querySelector(".conf");
+  const ovrCell = row.querySelector(".ovr");
+  const rankCell = row.querySelector(".rank");
+  const apRankSpan = row.querySelector(".ap-rank");
+  const netRankSpan = row.querySelector(".net-rank");
 
-  const currentApRank = apRankSpan ? apRankSpan.textContent : '';
-  const expectedApRank = newData.apRank < NO_RANK_VALUE ? String(newData.apRank) : '';
+  const currentApRank = apRankSpan ? apRankSpan.textContent : "";
+  const expectedApRank = newData.apRank < NO_RANK_VALUE ? String(newData.apRank) : "";
 
-  const currentNetRank = netRankSpan ? netRankSpan.textContent : '';
-  const expectedNetRank = newData.netRank != null ? `NET ${newData.netRank}` : '';
+  const currentNetRank = netRankSpan ? netRankSpan.textContent : "";
+  const expectedNetRank = newData.netRank != null ? `NET ${newData.netRank}` : "";
 
   return (
     row.dataset.team !== newData.team ||
@@ -527,7 +421,8 @@ async function loadStandings() {
       if (state.retryCount <= MAX_RETRY_ATTEMPTS) {
         const retryDelay = calculateRetryDelay();
         if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${state.retryCount})`);
-        setTimeout(() => loadStandings(), retryDelay);
+        if (state.retryTimer) clearTimeout(state.retryTimer);
+        state.retryTimer = setTimeout(() => loadStandings(), retryDelay);
       }
     }
 
@@ -549,6 +444,10 @@ async function loadFromWorker() {
 
   if (!data.standings || data.standings.length === 0) {
     throw new Error("No standings data from worker");
+  }
+
+  if (DEBUG && data.apPollDegraded) {
+    console.warn(`AP poll degraded (status ${data.apPollStatus}); rankings may be missing`);
   }
 
   const teamRows = data.standings.map(team => ({
@@ -601,7 +500,7 @@ async function loadFromCSV() {
   }
 
   const teamRows = rows
-    .map((cols) => {
+    .map(cols => {
       if (!cols.length) return null;
 
       const teamRaw = (cols[TEAM_COL] || "").trim();
@@ -641,10 +540,7 @@ async function loadFromCSV() {
 }
 
 function scheduleNextRefresh() {
-  if (state.refreshTimer) {
-    clearTimeout(state.refreshTimer);
-  }
-
+  if (state.refreshTimer) clearTimeout(state.refreshTimer);
   state.refreshTimer = setTimeout(() => {
     loadStandings();
     scheduleNextRefresh();
@@ -668,9 +564,11 @@ if (dom.refreshBtn) {
 requestWakeLock();
 
 document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible" && state.wakeLock === null) {
-    await requestWakeLock();
-  }
+  if (document.visibilityState !== "visible") return;
+  // The wake lock object can persist with `released === true` after the
+  // tab is hidden. Treat anything other than an active lock as "needs reacquire."
+  const needsReacquire = !state.wakeLock || state.wakeLock.released;
+  if (needsReacquire) await requestWakeLock();
 });
 
 window.addEventListener("online", () => {
@@ -686,4 +584,12 @@ if (!state.offseason) {
 loadStandings();
 if (!state.offseason) {
   scheduleNextRefresh();
+}
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(err => {
+      if (DEBUG) console.warn("Service worker registration failed:", err);
+    });
+  });
 }

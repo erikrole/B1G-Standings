@@ -4,37 +4,55 @@ A real-time, auto-updating display board for Big Ten Conference men's basketball
 
 ![Big Ten Standings](https://img.shields.io/badge/Big%20Ten-Standings-C5050C?style=for-the-badge)
 
-## 🏀 Features
+## Features
 
-### Real-Time Updates
-- **Auto-refresh**: Standings update automatically every 5 minutes
-- **Live data source status**: Green for Worker, yellow for CSV fallback
-- **Stale data alerts**: Warning if data hasn't updated in 30+ minutes
+- Auto-refreshes every 5 minutes
+- Position-change indicators (↑/↓) when standings shift
+- Wisconsin-themed display with AP and NET rankings
+- Wake lock keeps a kiosk display awake
+- Offline-capable shell via service worker (live data still requires network)
+- Offseason mode that freezes the final standings
 
-## 📊 Data Source
+## Data sources
 
-Standings are pulled from a Cloudflare Worker endpoint (with Google Sheets CSV fallback):
-- Automatic updates every 5 minutes
-- Smart fallback to CSV when worker requests fail
-- Manual update available by refreshing the page
+1. **Cloudflare Worker** (primary) — scrapes WarrenNolan + NCAA AP poll, returns JSON.
+2. **Google Sheet CSV** (fallback) — used when the worker fails twice in a row.
 
-## 🛠️ Technology Stack
+The status pill in the footer shows which source is live (`Connected`, `Backup`, `Failed`, `Final`).
 
-- **HTML5**: Semantic markup
-- **CSS3**: Custom properties, animations, responsive design
-- **Vanilla JavaScript**: No frameworks, pure ES6+
-- **Cloudflare Worker + Google Sheets**: Primary data source with resilient fallback
+## Project layout
 
-### Browser Compatibility
+```
+index.html           Static shell
+script.js            Browser entry point (ES module)
+worker.js            Cloudflare Worker (scrapes + serves JSON)
+style.css            Display styles
+manifest.webmanifest PWA manifest
+sw.js                Service worker (caches the shell)
+lib/                 Shared pure helpers (parsing, sorting, season, scrape)
+tests/               Vitest suite
+```
 
-- Chrome/Edge: ✅ Full support including wake lock
-- Firefox: ✅ Full support
-- Safari: ✅ Full support (limited wake lock)
-- Mobile browsers: ✅ Responsive design
+## Development
+
+```bash
+npm install
+npm test           # run the vitest suite once
+npm run test:watch # watch mode while iterating
+```
+
+There is no build step — `index.html` loads `script.js` as a native ES module.
+Local debug logging: append `?debug=1` to the URL or set `localStorage.debug = '1'`.
+
+When you change `script.js`, `style.css`, or any imported module, bump the
+`?v=` query string on those tags in `index.html` so browsers don't serve stale
+cached files.
+
+## Deployment
+
+`main` auto-deploys to production via Cloudflare Pages.
+The Worker (`worker.js`) is deployed separately to Cloudflare Workers.
 
 ---
 
-**Live Demo**: [mbb-standings.erikrole.com](https://mbb-standings.erikrole.com)
-**Production**: [wisc-mbb-standings.pages.dev](https://wisc-mbb-standings.pages.dev)
-
-Go Badgers! 🦡🏀
+Go Badgers!
