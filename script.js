@@ -18,6 +18,7 @@ const WORKER_RECOVERY_COOLDOWN_MS = 30 * 60 * 1000; // Retry worker after 30 min
 const FETCH_TIMEOUT_MS = 10 * 1000; // 10 second fetch timeout
 const MAX_RETRY_ATTEMPTS = 6; // Stop retrying after 6 attempts (~30 min total)
 const DEBUG = false; // Set to true to enable debug logging
+const FIXTURE_MODE = new URLSearchParams(window.location.search).get("fixture");
 
 // =====================
 // STATE
@@ -37,6 +38,27 @@ const state = {
   onlineDebounceTimer: null,
   offseason: false,
 };
+
+const FIXTURE_ROWS = [
+  { team: "MICHIGAN", conf: "19-1", ovr: "37-3", apRank: 1, netRank: 2, wins: 37, losses: 3, confWins: 19, confLosses: 1 },
+  { team: "NEBRASKA", conf: "15-5", ovr: "28-7", apRank: 14, netRank: 19, wins: 28, losses: 7, confWins: 15, confLosses: 5 },
+  { team: "MICHIGAN STATE", conf: "15-5", ovr: "27-8", apRank: 11, netRank: 13, wins: 27, losses: 8, confWins: 15, confLosses: 5 },
+  { team: "ILLINOIS", conf: "15-5", ovr: "28-9", apRank: 5, netRank: 10, wins: 28, losses: 9, confWins: 15, confLosses: 5 },
+  { team: "WISCONSIN", conf: "14-6", ovr: "24-11", apRank: 25, netRank: 22, wins: 24, losses: 11, confWins: 14, confLosses: 6 },
+  { team: "PURDUE", conf: "13-7", ovr: "30-9", apRank: 6, netRank: 7, wins: 30, losses: 9, confWins: 13, confLosses: 7 },
+  { team: "UCLA", conf: "13-7", ovr: "24-12", apRank: NO_RANK_VALUE, netRank: 36, wins: 24, losses: 12, confWins: 13, confLosses: 7 },
+  { team: "OHIO STATE", conf: "12-8", ovr: "21-13", apRank: NO_RANK_VALUE, netRank: 43, wins: 21, losses: 13, confWins: 12, confLosses: 8 },
+  { team: "IOWA", conf: "10-10", ovr: "24-13", apRank: 15, netRank: 25, wins: 24, losses: 13, confWins: 10, confLosses: 10 },
+  { team: "INDIANA", conf: "9-11", ovr: "18-14", apRank: NO_RANK_VALUE, netRank: 64, wins: 18, losses: 14, confWins: 9, confLosses: 11 },
+  { team: "MINNESOTA", conf: "8-12", ovr: "15-18", apRank: NO_RANK_VALUE, netRank: 91, wins: 15, losses: 18, confWins: 8, confLosses: 12 },
+  { team: "USC", conf: "7-13", ovr: "17-14", apRank: NO_RANK_VALUE, netRank: 78, wins: 17, losses: 14, confWins: 7, confLosses: 13 },
+  { team: "WASHINGTON", conf: "7-13", ovr: "16-17", apRank: NO_RANK_VALUE, netRank: 82, wins: 16, losses: 17, confWins: 7, confLosses: 13 },
+  { team: "RUTGERS", conf: "6-14", ovr: "14-20", apRank: NO_RANK_VALUE, netRank: 109, wins: 14, losses: 20, confWins: 6, confLosses: 14 },
+  { team: "NORTHWESTERN", conf: "5-15", ovr: "15-19", apRank: NO_RANK_VALUE, netRank: 113, wins: 15, losses: 19, confWins: 5, confLosses: 15 },
+  { team: "OREGON", conf: "5-15", ovr: "12-20", apRank: NO_RANK_VALUE, netRank: 118, wins: 12, losses: 20, confWins: 5, confLosses: 15 },
+  { team: "MARYLAND", conf: "4-16", ovr: "12-21", apRank: NO_RANK_VALUE, netRank: 129, wins: 12, losses: 21, confWins: 4, confLosses: 16 },
+  { team: "PENN STATE", conf: "3-17", ovr: "12-20", apRank: NO_RANK_VALUE, netRank: 137, wins: 12, losses: 20, confWins: 3, confLosses: 17 },
+];
 
 // =====================
 // CACHED DOM REFERENCES
@@ -106,7 +128,31 @@ function calculateWinPercentage(wins, losses) {
   return total === 0 ? 0 : wins / total;
 }
 
+function isFixtureMode(...modes) {
+  return modes.includes(FIXTURE_MODE);
+}
+
+function createFixtureRows() {
+  return FIXTURE_ROWS.map(team => ({
+    ...team,
+    pct: calculateWinPercentage(team.wins, team.losses),
+    confPct: calculateWinPercentage(team.confWins, team.confLosses),
+    isWisconsin: team.team === "WISCONSIN",
+  }));
+}
+
+function getSuccessfulUpdateTime() {
+  if (isFixtureMode("stale")) {
+    return Date.now() - STALE_DATA_THRESHOLD_MS - 60 * 1000;
+  }
+
+  return Date.now();
+}
+
 function isOffseason() {
+  if (isFixtureMode("offseason")) return true;
+  if (FIXTURE_MODE) return false;
+
   const now = new Date();
   const month = now.getMonth(); // 0-indexed
   const day = now.getDate();
@@ -221,7 +267,7 @@ function setLoadingState(loading) {
 function updateStatusIndicator(status) {
   if (!dom.statusIndicator || !dom.statusLabel) return;
 
-  dom.statusIndicator.classList.remove("connected", "csv", "failed");
+  dom.statusIndicator.classList.remove("connected", "csv", "failed", "final");
 
   if (status === "connected") {
     dom.statusIndicator.classList.add("connected");
@@ -233,7 +279,7 @@ function updateStatusIndicator(status) {
     dom.statusIndicator.classList.add("failed");
     dom.statusLabel.textContent = "Failed";
   } else if (status === "offseason") {
-    dom.statusIndicator.classList.add("csv");
+    dom.statusIndicator.classList.add("final");
     dom.statusLabel.textContent = "Final";
   }
 }
@@ -308,7 +354,7 @@ async function requestWakeLock() {
         if (DEBUG) console.log("Wake lock released");
       });
     } catch (err) {
-      console.error("Wake lock error:", err);
+      if (DEBUG) console.warn("Wake lock unavailable:", err);
     }
   }
 }
@@ -372,7 +418,7 @@ function createTeamRow(rowData, index) {
   row.innerHTML = `
     <td class="rank">${currentPosition}.</td>
     <td class="team-cell">
-      ${apRank < NO_RANK_VALUE ? `<span class="ap-rank">${apRank}</span>` : ""}
+      ${apRank < NO_RANK_VALUE ? `<span class="ap-rank" aria-label="AP No. ${apRank}">${apRank}</span>` : ""}
       <span class="team-name">${escapeHTML(team)}</span>
       ${netRank != null ? `<span class="net-rank">NET ${netRank}</span>` : ""}
       ${changeIndicator}
@@ -505,7 +551,7 @@ async function loadStandings() {
       state.previousStandings.set(rowData.team, index + 1);
     });
 
-    state.lastSuccessfulUpdate = Date.now();
+    state.lastSuccessfulUpdate = getSuccessfulUpdateTime();
     state.retryCount = 0;
 
     if (state.offseason) {
@@ -517,27 +563,35 @@ async function loadStandings() {
     }
     setLoadingState(false);
   } catch (err) {
-    console.error("Error loading data:", err);
+    if (DEBUG) console.error("Error loading data:", err);
     clearSkeleton();
     setLoadingState(false);
     updateStatusIndicator("failed");
 
-    if (!state.offseason) {
+    const shouldRetry = !state.offseason && !FIXTURE_MODE && state.retryCount < MAX_RETRY_ATTEMPTS;
+
+    if (shouldRetry) {
       state.retryCount++;
-      if (state.retryCount <= MAX_RETRY_ATTEMPTS) {
-        const retryDelay = calculateRetryDelay();
-        if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${state.retryCount})`);
-        setTimeout(() => loadStandings(), retryDelay);
-      }
+      const retryDelay = calculateRetryDelay();
+      if (DEBUG) console.log(`Retrying in ${retryDelay}ms (attempt ${state.retryCount})`);
+      setTimeout(() => loadStandings(), retryDelay);
     }
 
     if (!state.lastSuccessfulUpdate) {
-      showError(state.offseason ? "Standings unavailable" : "Error loading data - retrying...");
+      showError(shouldRetry ? "Error loading data - retrying..." : "Standings unavailable");
     }
   }
 }
 
 async function loadFromWorker() {
+  if (FIXTURE_MODE) {
+    if (isFixtureMode("worker", "stale")) {
+      return createFixtureRows();
+    }
+
+    throw new Error(`Fixture worker failure: ${FIXTURE_MODE}`);
+  }
+
   if (DEBUG) console.log("Fetching from Cloudflare Worker...");
   const res = await fetchWithTimeout(`${WORKER_URL}?t=${Date.now()}`, { cache: "no-store" });
 
@@ -563,6 +617,14 @@ async function loadFromWorker() {
 }
 
 async function loadFromCSV() {
+  if (FIXTURE_MODE) {
+    if (isFixtureMode("csv", "offseason")) {
+      return createFixtureRows();
+    }
+
+    throw new Error(`Fixture CSV failure: ${FIXTURE_MODE}`);
+  }
+
   if (DEBUG) console.log("Fetching from Google Sheets CSV...");
   const res = await fetchWithTimeout(`${CSV_URL}&t=${Date.now()}`, { cache: "no-store" });
 

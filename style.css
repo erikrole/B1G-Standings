@@ -6,6 +6,7 @@
   --color-online: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
+  --color-final: #d9a441;
   --color-moved-up: rgba(76, 175, 80, 0.3);
   --color-moved-down: rgba(244, 67, 54, 0.3);
 
@@ -20,7 +21,6 @@
   --size-row: 3.8vh;
   --size-record: 2.2vh;
   --size-footer: 1.4vh;
-  --size-wisconsin-team: 3.3vh;
 
   --spacing-cell-padding: 0 1vw;
 }
@@ -177,9 +177,14 @@ body {
   color: var(--color-error);
 }
 
+.status-indicator.final {
+  color: var(--color-final);
+}
+
 /* Always show label for non-connected states so users know data may be stale */
 .status-indicator.csv .status-label,
-.status-indicator.failed .status-label {
+.status-indicator.failed .status-label,
+.status-indicator.final .status-label {
   opacity: 1;
 }
 
@@ -238,12 +243,14 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
   padding: 0.8vh 0 0.4vh;
 }
 
 .standings-table {
-  width: 100%;
+  width: min(100%, 1120px);
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 /* Column widths */
@@ -359,7 +366,7 @@ body {
 
 .team-name {
   font-family: var(--font-heavy);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   font-weight: 900;
   font-size: var(--size-team);
   display: inline-block;
@@ -424,7 +431,7 @@ body {
   font-family: var(--font-wisconsin);
   font-weight: normal;
   letter-spacing: 0.02em;
-  font-size: var(--size-wisconsin-team);
+  font-size: var(--size-team);
 }
 
 /* ========== FOOTER ========== */
@@ -434,14 +441,14 @@ body {
   justify-content: space-between;
   align-items: flex-end;
   font-size: var(--size-footer);
-  opacity: 0.75;
-  margin-top: 1.2vh;
+  opacity: 0.86;
+  margin-top: 0.9vh;
 }
 
 .brand {
   font-family: var(--font-wisconsin);
   letter-spacing: 0.02em;
-  font-size: 1.3vh;
+  font-size: 1.45vh;
 }
 
 .timestamp-container {
@@ -539,7 +546,6 @@ body {
   :root {
     --size-header: 10vh;
     --size-team: 4.2vh;
-    --size-wisconsin-team: 2.8vh;
   }
 }
 
@@ -556,7 +562,6 @@ body {
     --size-header: 8vh;
     --size-team: 3.5vh;
     --size-row: 3.2vh;
-    --size-wisconsin-team: 2.4vh;
     --size-record: 1.9vh;
     --size-footer: 1.2vh;
   }
@@ -565,6 +570,7 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 0.5vh;
+    opacity: 0.9;
   }
 
   .timestamp-container {
@@ -573,6 +579,72 @@ body {
 
   .b1g-logo {
     height: 8vh;
+  }
+}
+
+/* ========== RESPONSIVE: SHORT SCOREBOARD DISPLAYS ========== */
+@media (max-height: 760px) and (min-width: 760px) {
+  :root {
+    --size-header: 8.5vh;
+    --size-team: 4vh;
+    --size-row: 3.1vh;
+    --size-record: 2vh;
+    --size-footer: 1.25vh;
+  }
+
+  .page {
+    padding-top: 1vh;
+    padding-bottom: calc(1vh + env(safe-area-inset-bottom));
+  }
+
+  .b1g-logo {
+    height: 9vh;
+  }
+
+  .header-content {
+    gap: 0.25vh;
+  }
+
+  .header h1 {
+    margin-bottom: 0.35vh;
+  }
+
+  .offseason-banner {
+    padding-top: 0.35vh;
+    padding-bottom: 0.15vh;
+  }
+
+  .offseason-note {
+    margin-top: 0.1vh;
+    font-size: 1.2vh;
+  }
+
+  .main {
+    padding-top: 0.35vh;
+    padding-bottom: 0.1vh;
+  }
+
+  .standings-table {
+    width: min(100%, 1020px);
+  }
+
+  .row td,
+  .row th {
+    padding-top: 0.16vh;
+    padding-bottom: 0.16vh;
+  }
+
+  .row.wisconsin td {
+    padding-top: 0.24vh;
+    padding-bottom: 0.24vh;
+  }
+
+  .table-header th {
+    padding-bottom: 0.28vh;
+  }
+
+  .footer {
+    margin-top: 0.35vh;
   }
 }
 
